@@ -1,0 +1,126 @@
+"""Foundation-layer tables (plan §3.1): company row, generic cross-cutting tables
+(audit log, attachments, comments, numbering, reference lists, settings) used by
+every other module. No app_user / auth tables here yet (deferred, plan §7).
+"""
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import DateTime, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import AuditableRecord, Base, IdMixin, TimestampMixin
+
+
+class Entity(IdMixin, TimestampMixin, Base):
+    """Single company row (doc D-1: one legal entity, Dubai only). Every transactional
+    table below carries entity_id, defaulted to this row's id, even though v1 only
+    ever has one row -- see app/seed for how it's created.
+    """
+
+    __tablename__ = "entity"
+
+    legal_name: Mapped[str] = mapped_column(String(255))
+    trn: Mapped[str | None] = mapped_column(String(50))
+    license_number: Mapped[str | None] = mapped_column(String(50))
+    financial_year_start_month: Mapped[int] = mapped_column(default=1)  # doc §7: 1 Jan - 31 Dec
+    base_currency: Mapped[str] = mapped_column(String(3), default="AED")  # doc §5.6: AED only in v1
+    timezone: Mapped[str] = mapped_column(String(50), default="Asia/Dubai")
+
+
+class AuditLog(IdMixin, Base):
+    """Immutable change log (doc §5.2). Written by app.services.audit, never edited.
+    `changed_by` is nullable/unused until auth exists (plan §7).
+    """
+
+    __tablename__ = "audit_log"
+
+    entity_type: Mapped[str] = mapped_column(String(100), index=True)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    field: Mapped[str | None] = mapped_column(String(100))
+    old_value: Mapped[str | None] = mapped_column(Text)
+    new_value: Mapped[str | None] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(String(30))  # create | update | delete | status_change
+    reason: Mapped[str | None] = mapped_column(Text)
+    changed_by: Mapped[str | None] = mapped_column(String(255))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Attachment(IdMixin, TimestampMixin, Base):
+    """Generic file attachment, linkable to any entity by (entity_type, entity_id) --
+    doc §5.3. Local disk storage in v1; file_path is relative to settings.upload_dir.
+    """
+
+    __tablename__ = "attachment"
+
+    entity_type: Mapped[str] = mapped_column(String(100), index=True)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    file_path: Mapped[str] = mapped_column(String(500))
+    original_filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    document_type: Mapped[str | None] = mapped_column(String(100))
+    issue_date: Mapped[date | None]
+    expiry_date: Mapped[date | None] = mapped_column(index=True)  # feeds the alert engine later
+
+
+class Comment(IdMixin, TimestampMixin, Base):
+    """Threaded comment log, generic per entity (doc §1.1 "Comments" / separate from
+    the audit trail: audit records *what* changed, comments record *why*).
+    """
+
+    __tablename__ = "comment"
+
+    entity_type: Mapped[str] = mapped_column(String(100), index=True)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    author_name: Mapped[str] = mapped_column(String(255))  # free text until auth exists
+    text: Mapped[str] = mapped_column(Text)
+
+
+class DocumentSequence(IdMixin, Base):
+    """Configurable sequential numbering per document type (doc §5.4). One row per
+    doc_type (+ year, if the series resets yearly). Advanced atomically by
+    app.services.numbering.NumberingService.
+    """
+
+    __tablename__ = "document_sequence"
+    __table_args__ = (UniqueConstraint("doc_type", "year", name="uq_document_sequence_type_year"),)
+
+    doc_type: Mapped[str] = mapped_column(String(50), index=True)  # e.g. 'unit', 'invoice', 'journal'
+    prefix: Mapped[str] = mapped_column(String(20), default="")
+    next_number: Mapped[int] = mapped_column(default=1)
+    reset_cycle: Mapped[str] = mapped_column(String(20), default="never")  # never | yearly
+    year: Mapped[int | None]  # populated only when reset_cycle='yearly'
+
+
+class ReferenceListItem(AuditableRecord, Base):
+    """Every "list maintained by you" from doc §7.4 lives here as data, never as a
+    hard-coded enum: unit_type, unit_space_type, block_type (+available flag),
+    utility_type, task_type, document_type, cancellation_policy, amenity_type,
+    unit_group_type, tag, insurance_policy_type, counterparty_role.
+    """
+
+    __tablename__ = "reference_list_item"
+    __table_args__ = (UniqueConstraint("list_name", "code", name="uq_reference_list_item_list_code"),)
+
+    list_name: Mapped[str] = mapped_column(String(50), index=True)
+    code: Mapped[str] = mapped_column(String(50))
+    label: Mapped[str] = mapped_column(String(255))
+    # Only meaningful for list_name='block_type' (doc §1.1): does this block type count
+    # as available for the "adjusted occupancy" measure?
+    is_available: Mapped[bool | None]
+    sort_order: Mapped[int] = mapped_column(default=0)
+    active: Mapped[bool] = mapped_column(default=True)
+
+
+class Setting(IdMixin, TimestampMixin, Base):
+    """Key/value config store for thresholds and rates that must never be hard-coded
+    (doc: "never a constant in code" appears repeatedly -- e.g. asset capitalisation
+    threshold, cheque-deposit-reminder days, Tourism Dirham rate, alert horizons).
+    Value is stored as text; callers parse to the type they expect.
+    """
+
+    __tablename__ = "setting"
+
+    key: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    value: Mapped[str] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)

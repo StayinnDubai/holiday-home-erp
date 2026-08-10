@@ -1,0 +1,26 @@
+/* Global styles. PrimeNG's own component styles come from the Aura theme preset
+   registered via providePrimeNG() in app.config.ts -- only icons + the ag-Grid legacy
+   CSS theme (see shared/ag-grid/ag-grid-table.component.ts) need importing here. */
+@import 'primeicons/primeicons.css';
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-quartz.css';
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+* {
+  box-sizing: border-box;
+}

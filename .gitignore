@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Uploaded files (local dev storage)
+backend/uploads/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Generated
+docs/*.pdf
