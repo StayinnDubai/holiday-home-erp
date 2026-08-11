@@ -16,13 +16,32 @@ class Entity(IdMixin, TimestampMixin, Base):
     """Single company row (doc D-1: one legal entity, Dubai only). Every transactional
     table below carries entity_id, defaulted to this row's id, even though v1 only
     ever has one row -- see app/seed for how it's created.
+
+    Settings > Company (doc §7): "legal entity, TRN, licence, logo, addresses,
+    financial year 1 January - 31 December inclusive (confirmed), base currency,
+    timezone." Logo is a generic Attachment (entity_type='company') rather than a
+    column here, same as every other document in the system (doc §5.3). `address`
+    is singular for now -- the doc's "addresses" (plural) isn't elaborated anywhere
+    else, so splitting it into registered-vs-operating address is deferred until
+    that distinction is actually needed rather than guessed at now.
     """
 
     __tablename__ = "entity"
 
     legal_name: Mapped[str] = mapped_column(String(255))
+    brand_name: Mapped[str | None] = mapped_column(String(255))
     trn: Mapped[str | None] = mapped_column(String(50))
+    vat_number: Mapped[str | None] = mapped_column(String(50))
     license_number: Mapped[str | None] = mapped_column(String(50))
+    website: Mapped[str | None] = mapped_column(String(255))
+    phone_number: Mapped[str | None] = mapped_column(String(50))
+    manager_name: Mapped[str | None] = mapped_column(String(255))
+    date_of_registration: Mapped[date | None]
+    # Free text for now -- one shareholder per line. A structured name/ownership-%
+    # sub-entity is a natural next step but wasn't asked for; cheap to add later
+    # without touching this column.
+    shareholders: Mapped[str | None] = mapped_column(Text)
+    address: Mapped[str | None] = mapped_column(Text)
     financial_year_start_month: Mapped[int] = mapped_column(default=1)  # doc §7: 1 Jan - 31 Dec
     base_currency: Mapped[str] = mapped_column(String(3), default="AED")  # doc §5.6: AED only in v1
     timezone: Mapped[str] = mapped_column(String(50), default="Asia/Dubai")
@@ -49,6 +68,12 @@ class AuditLog(IdMixin, Base):
 class Attachment(IdMixin, TimestampMixin, Base):
     """Generic file attachment, linkable to any entity by (entity_type, entity_id) --
     doc §5.3. Local disk storage in v1; file_path is relative to settings.upload_dir.
+
+    `document_name` is a user-editable display label, separate from
+    `original_filename` (the immutable name of the file as uploaded) -- it defaults
+    to the filename at upload time but can be renamed afterwards without touching
+    the underlying file, which is what "edit" means for an attachment in v1 (the
+    file itself isn't replaced/versioned; re-upload creates a new attachment).
     """
 
     __tablename__ = "attachment"
@@ -57,6 +82,7 @@ class Attachment(IdMixin, TimestampMixin, Base):
     entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     file_path: Mapped[str] = mapped_column(String(500))
     original_filename: Mapped[str] = mapped_column(String(255))
+    document_name: Mapped[str | None] = mapped_column(String(255))
     content_type: Mapped[str | None] = mapped_column(String(100))
     document_type: Mapped[str | None] = mapped_column(String(100))
     issue_date: Mapped[date | None]

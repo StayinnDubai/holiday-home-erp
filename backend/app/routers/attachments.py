@@ -2,6 +2,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,7 +10,7 @@ from app.core.db import get_db
 from app.core.errors import ApiError
 from app.models.foundation import Attachment
 from app.schemas.common import ItemResponse, ListMeta, ListResponse
-from app.schemas.foundation import AttachmentOut
+from app.schemas.foundation import AttachmentOut, AttachmentUpdate
 from app.services.attachments import AttachmentService
 
 router = APIRouter(prefix="/attachments", tags=["attachments"])
@@ -30,6 +31,7 @@ def list_attachments(entity_type: str, entity_id: uuid.UUID, db: Session = Depen
 async def upload_attachment(
     entity_type: str = Form(...),
     entity_id: uuid.UUID = Form(...),
+    document_name: str | None = Form(None),
     document_type: str | None = Form(None),
     issue_date: date | None = Form(None),
     expiry_date: date | None = Form(None),
@@ -43,6 +45,7 @@ async def upload_attachment(
         content=content,
         entity_type=entity_type,
         entity_id=entity_id,
+        document_name=document_name,
         document_type=document_type,
         issue_date=issue_date,
         expiry_date=expiry_date,
@@ -50,6 +53,23 @@ async def upload_attachment(
     db.commit()
     db.refresh(attachment)
     return ItemResponse(data=attachment)
+
+
+@router.patch("/{attachment_id}", response_model=ItemResponse[AttachmentOut])
+def update_attachment(attachment_id: uuid.UUID, payload: AttachmentUpdate, db: Session = Depends(get_db)):
+    return ItemResponse(data=AttachmentService.update(db, attachment_id, payload))
+
+
+@router.get("/{attachment_id}/file")
+def download_attachment(attachment_id: uuid.UUID, db: Session = Depends(get_db)):
+    row = db.get(Attachment, attachment_id)
+    if row is None:
+        raise ApiError("Attachment not found.", code="not_found", status_code=404)
+    return FileResponse(
+        row.file_path,
+        filename=row.original_filename,
+        media_type=row.content_type or "application/octet-stream",
+    )
 
 
 @router.delete("/{attachment_id}", status_code=204)

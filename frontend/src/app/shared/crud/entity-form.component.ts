@@ -12,6 +12,7 @@ import { PrimeTemplate } from 'primeng/api';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { CrudApiService } from '../../core/api/crud-api.service';
+import { AttachmentsFieldComponent } from './attachments-field.component';
 import { EntityFieldConfig, SelectOption } from './entity-page-config.model';
 
 function requiredArray(control: AbstractControl): ValidationErrors | null {
@@ -49,6 +50,7 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
     SelectModule,
     TextareaModule,
     EntityFormComponent,
+    AttachmentsFieldComponent,
   ],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="entity-form">
@@ -129,6 +131,43 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
         </p-multiselect>
 
         <textarea *ngIf="field.type === 'textarea'" pTextarea [id]="field.key" [formControlName]="field.key" rows="3"></textarea>
+
+        <div *ngIf="field.type === 'action-date'" class="entity-form__action-date">
+          <div class="entity-form__action-date-buttons">
+            <p-button
+              label="Set manually"
+              size="small"
+              type="button"
+              [outlined]="dateSource(field) !== 'manual'"
+              (onClick)="setDateSource(field, 'manual')"
+            />
+            <p-button
+              label="Reconcile from bank statement"
+              size="small"
+              type="button"
+              [outlined]="dateSource(field) !== 'bank_reconciliation'"
+              (onClick)="setDateSource(field, 'bank_reconciliation')"
+            />
+          </div>
+          <p-datepicker
+            [inputId]="field.key"
+            [formControlName]="field.key"
+            dateFormat="yy-mm-dd"
+            (onSelect)="ensureDateSource(field)"
+            placeholder="Pick a date..."
+          />
+        </div>
+
+        <div *ngIf="field.type === 'attachments'">
+          <app-attachments-field
+            *ngIf="modelId; else attachmentsUnsaved"
+            [entityType]="field.attachmentEntityType || ''"
+            [entityId]="modelId"
+          />
+          <ng-template #attachmentsUnsaved>
+            <p class="entity-form__hint">Save the record first, then reopen it to attach a file.</p>
+          </ng-template>
+        </div>
       </div>
 
       <div class="entity-form__actions">
@@ -196,6 +235,21 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
       .entity-form__quick-create-footer p-button {
         display: block;
       }
+      .entity-form__action-date {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+      .entity-form__action-date-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .entity-form__hint {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.85rem;
+      }
     `,
   ],
 })
@@ -218,6 +272,12 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
 
   get formFields(): EntityFieldConfig[] {
     return this.fields.filter((f) => f.showInForm !== false);
+  }
+
+  /** String id of the record being edited, or '' for a new/unsaved record --
+   * 'attachments' fields need this to know whether they have anything to attach to. */
+  get modelId(): string {
+    return this.model ? String((this.model as Record<string, unknown>)['id'] ?? '') : '';
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -263,11 +323,40 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
     const group: Record<string, unknown> = {};
     for (const field of this.formFields) {
       const raw = this.model ? (this.model as Record<string, unknown>)[field.key] : undefined;
-      const value = field.type === 'date' && typeof raw === 'string' ? new Date(raw) : raw ?? this.defaultFor(field);
+      const isDateLike = field.type === 'date' || field.type === 'action-date';
+      const value = isDateLike && typeof raw === 'string' ? new Date(raw) : raw ?? this.defaultFor(field);
       const validators = field.required ? [field.type === 'relation-multiselect' ? requiredArray : Validators.required] : [];
       group[field.key] = [{ value, disabled: false }, validators];
+
+      // 'action-date' fields write to a sibling "how was this set" field that isn't
+      // necessarily its own entry in `fields` (it usually only needs to exist as a
+      // grid column, not a rendered form field) -- give it a control here so there's
+      // somewhere for setDateSource()/ensureDateSource() to write.
+      if (field.type === 'action-date' && field.sourceFieldKey && !group[field.sourceFieldKey]) {
+        const sourceRaw = this.model ? (this.model as Record<string, unknown>)[field.sourceFieldKey] : undefined;
+        group[field.sourceFieldKey] = [sourceRaw ?? null];
+      }
     }
     this.form = this.fb.group(group);
+  }
+
+  dateSource(field: EntityFieldConfig): unknown {
+    return field.sourceFieldKey ? this.form.get(field.sourceFieldKey)?.value : null;
+  }
+
+  setDateSource(field: EntityFieldConfig, source: 'manual' | 'bank_reconciliation'): void {
+    if (!field.sourceFieldKey) return;
+    this.form.get(field.sourceFieldKey)?.setValue(source);
+    this.form.get(field.sourceFieldKey)?.markAsDirty();
+  }
+
+  /** Picking a date without ever clicking one of the two source buttons still needs
+   * a source recorded -- defaults to 'manual', since that's what typing/picking a
+   * date directly is. */
+  ensureDateSource(field: EntityFieldConfig): void {
+    if (!field.sourceFieldKey) return;
+    const control = this.form.get(field.sourceFieldKey);
+    if (control && !control.value) control.setValue('manual');
   }
 
   private defaultFor(field: EntityFieldConfig): unknown {
@@ -282,7 +371,12 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
     const payload: Record<string, unknown> = {};
     for (const field of this.formFields) {
       const value = raw[field.key];
-      payload[field.key] = field.type === 'date' && value instanceof Date ? value.toISOString().slice(0, 10) : value;
+      const isDateLike = field.type === 'date' || field.type === 'action-date';
+      payload[field.key] = isDateLike && value instanceof Date ? value.toISOString().slice(0, 10) : value;
+
+      if (field.type === 'action-date' && field.sourceFieldKey) {
+        payload[field.sourceFieldKey] = raw[field.sourceFieldKey] ?? null;
+      }
     }
     this.save.emit(payload);
   }

@@ -4,6 +4,43 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict
 
 
+# ---------- Company (doc §7 "Company") -- singleton, GET/PATCH only ----------
+class EntityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    legal_name: str
+    brand_name: str | None = None
+    trn: str | None = None
+    vat_number: str | None = None
+    license_number: str | None = None
+    website: str | None = None
+    phone_number: str | None = None
+    manager_name: str | None = None
+    date_of_registration: date | None = None
+    shareholders: str | None = None
+    address: str | None = None
+    financial_year_start_month: int
+    base_currency: str
+    timezone: str
+
+
+class EntityUpdate(BaseModel):
+    legal_name: str | None = None
+    brand_name: str | None = None
+    trn: str | None = None
+    vat_number: str | None = None
+    license_number: str | None = None
+    website: str | None = None
+    phone_number: str | None = None
+    manager_name: str | None = None
+    date_of_registration: date | None = None
+    shareholders: str | None = None
+    address: str | None = None
+    financial_year_start_month: int | None = None
+    base_currency: str | None = None
+    timezone: str | None = None
+
+
 # ---------- Reference list items (doc §7.4) ----------
 class ReferenceListItemBase(BaseModel):
     list_name: str
@@ -58,11 +95,19 @@ class AttachmentOut(BaseModel):
     entity_id: uuid.UUID
     file_path: str
     original_filename: str
+    document_name: str | None
     content_type: str | None
     document_type: str | None
     issue_date: date | None
     expiry_date: date | None
     created_at: datetime
+
+
+class AttachmentUpdate(BaseModel):
+    document_name: str | None = None
+    document_type: str | None = None
+    issue_date: date | None = None
+    expiry_date: date | None = None
 
 
 # ---------- Comments (doc §1.1: "why", separate from the audit trail) ----------

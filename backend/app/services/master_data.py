@@ -5,8 +5,29 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
 from app.core.pagination import PaginationParams, paginate
-from app.models.master_data import Building, Counterparty, Unit, UnitLandlord
-from app.schemas.master_data import BuildingCreate, BuildingUpdate, CounterpartyCreate, CounterpartyUpdate, UnitCreate, UnitUpdate
+from app.models.master_data import (
+    Building,
+    BuildingAmenity,
+    BuildingContact,
+    BuildingDeposit,
+    Counterparty,
+    Unit,
+    UnitLandlord,
+)
+from app.schemas.master_data import (
+    BuildingAmenityCreate,
+    BuildingAmenityUpdate,
+    BuildingContactCreate,
+    BuildingContactUpdate,
+    BuildingCreate,
+    BuildingDepositCreate,
+    BuildingDepositUpdate,
+    BuildingUpdate,
+    CounterpartyCreate,
+    CounterpartyUpdate,
+    UnitCreate,
+    UnitUpdate,
+)
 from app.services.audit import AuditService
 from app.services.numbering import NumberingService
 
@@ -90,6 +111,198 @@ class BuildingService:
         )
         for r in rows:
             r.unit_count = counts.get(r.id, 0)
+
+
+# ---------------------------------------------------------------------------
+# Building contacts, amenities, deposits and fees (doc §1.3)
+# ---------------------------------------------------------------------------
+def _validate_building_exists(db: Session, building_id: uuid.UUID) -> None:
+    building = db.get(Building, building_id)
+    if building is None or building.is_deleted:
+        raise ApiError("Selected building does not exist.", code="invalid_reference", status_code=400)
+
+
+def _attach_building_names(db: Session, rows: list, building_id_attr: str = "building_id") -> None:
+    if not rows:
+        return
+    ids = [getattr(r, building_id_attr) for r in rows]
+    names = {b.id: b.name for b in db.scalars(select(Building).where(Building.id.in_(ids))).all()}
+    for r in rows:
+        r.building_name = names.get(getattr(r, building_id_attr))
+
+
+class BuildingContactService:
+    @staticmethod
+    def list_page(db: Session, params: PaginationParams) -> tuple[list[BuildingContact], int]:
+        stmt = select(BuildingContact).where(BuildingContact.is_deleted.is_(False))
+        if params.q:
+            stmt = stmt.where(BuildingContact.name.ilike(f"%{params.q}%"))
+        col = _sort_col(BuildingContact, params.sort_by, BuildingContact.name)
+        stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
+        rows, total = paginate(db, stmt, params)
+        _attach_building_names(db, rows)
+        return rows, total
+
+    @staticmethod
+    def get(db: Session, contact_id: uuid.UUID) -> BuildingContact:
+        row = db.get(BuildingContact, contact_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building contact not found.", code="not_found", status_code=404)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: BuildingContactCreate) -> BuildingContact:
+        _validate_building_exists(db, payload.building_id)
+        row = BuildingContact(**payload.model_dump())
+        db.add(row)
+        db.flush()
+        AuditService.log(db, entity_type="building_contact", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def update(db: Session, contact_id: uuid.UUID, payload: BuildingContactUpdate) -> BuildingContact:
+        row = db.get(BuildingContact, contact_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building contact not found.", code="not_found", status_code=404)
+        data = payload.model_dump(exclude_unset=True)
+        if "building_id" in data:
+            _validate_building_exists(db, data["building_id"])
+        for field, value in data.items():
+            setattr(row, field, value)
+        AuditService.log(db, entity_type="building_contact", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, contact_id: uuid.UUID) -> None:
+        row = db.get(BuildingContact, contact_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building contact not found.", code="not_found", status_code=404)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="building_contact", entity_id=row.id, action="delete")
+        db.commit()
+
+
+class BuildingAmenityService:
+    @staticmethod
+    def list_page(db: Session, params: PaginationParams) -> tuple[list[BuildingAmenity], int]:
+        stmt = select(BuildingAmenity).where(BuildingAmenity.is_deleted.is_(False))
+        if params.q:
+            stmt = stmt.where(BuildingAmenity.name.ilike(f"%{params.q}%"))
+        col = _sort_col(BuildingAmenity, params.sort_by, BuildingAmenity.name)
+        stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
+        rows, total = paginate(db, stmt, params)
+        _attach_building_names(db, rows)
+        return rows, total
+
+    @staticmethod
+    def get(db: Session, amenity_id: uuid.UUID) -> BuildingAmenity:
+        row = db.get(BuildingAmenity, amenity_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building amenity not found.", code="not_found", status_code=404)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: BuildingAmenityCreate) -> BuildingAmenity:
+        _validate_building_exists(db, payload.building_id)
+        row = BuildingAmenity(**payload.model_dump())
+        db.add(row)
+        db.flush()
+        AuditService.log(db, entity_type="building_amenity", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def update(db: Session, amenity_id: uuid.UUID, payload: BuildingAmenityUpdate) -> BuildingAmenity:
+        row = db.get(BuildingAmenity, amenity_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building amenity not found.", code="not_found", status_code=404)
+        data = payload.model_dump(exclude_unset=True)
+        if "building_id" in data:
+            _validate_building_exists(db, data["building_id"])
+        for field, value in data.items():
+            setattr(row, field, value)
+        AuditService.log(db, entity_type="building_amenity", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, amenity_id: uuid.UUID) -> None:
+        row = db.get(BuildingAmenity, amenity_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building amenity not found.", code="not_found", status_code=404)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="building_amenity", entity_id=row.id, action="delete")
+        db.commit()
+
+
+class BuildingDepositService:
+    @staticmethod
+    def list_page(db: Session, params: PaginationParams) -> tuple[list[BuildingDeposit], int]:
+        stmt = select(BuildingDeposit).where(BuildingDeposit.is_deleted.is_(False))
+        if params.q:
+            stmt = stmt.where(BuildingDeposit.description.ilike(f"%{params.q}%"))
+        col = _sort_col(BuildingDeposit, params.sort_by, BuildingDeposit.date)
+        stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
+        rows, total = paginate(db, stmt, params)
+        _attach_building_names(db, rows)
+        return rows, total
+
+    @staticmethod
+    def get(db: Session, deposit_id: uuid.UUID) -> BuildingDeposit:
+        row = db.get(BuildingDeposit, deposit_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building deposit not found.", code="not_found", status_code=404)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: BuildingDepositCreate) -> BuildingDeposit:
+        _validate_building_exists(db, payload.building_id)
+        row = BuildingDeposit(**payload.model_dump())
+        db.add(row)
+        db.flush()
+        AuditService.log(db, entity_type="building_deposit", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def update(db: Session, deposit_id: uuid.UUID, payload: BuildingDepositUpdate) -> BuildingDeposit:
+        row = db.get(BuildingDeposit, deposit_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building deposit not found.", code="not_found", status_code=404)
+        data = payload.model_dump(exclude_unset=True)
+        if "building_id" in data:
+            _validate_building_exists(db, data["building_id"])
+        for field, value in data.items():
+            setattr(row, field, value)
+        AuditService.log(db, entity_type="building_deposit", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        _attach_building_names(db, [row])
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, deposit_id: uuid.UUID) -> None:
+        row = db.get(BuildingDeposit, deposit_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Building deposit not found.", code="not_found", status_code=404)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="building_deposit", entity_id=row.id, action="delete")
+        db.commit()
 
 
 # ---------------------------------------------------------------------------

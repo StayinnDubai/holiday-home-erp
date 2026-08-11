@@ -6,8 +6,10 @@ own module is built -- this is deliberately the header-only slice.
 """
 import uuid
 from datetime import date
+from datetime import date as _date  # BuildingDeposit has a field literally named
+# `date`, which shadows the `date` type inside its own class body -- alias avoids it.
 
-from sqlalchemy import Date, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,8 +17,21 @@ from app.models.base import AuditableRecord, Base
 
 
 class Building(AuditableRecord, Base):
-    """Plan §3.2 `building` -- header fields only. A building holds one-or-more units
-    (the reverse of Unit.building_id being mandatory and singular)."""
+    """Plan §3.2 `building` (doc §1.3) -- "everything true of a building rather than
+    a unit... the place where access rules, permit requirements and restrictions
+    actually live." A building holds one-or-more units (the reverse of
+    Unit.building_id being mandatory and singular).
+
+    Restrictions, access rules, parking, move-in permit requirements and portal
+    credentials are kept as flat fields on the header rather than split into further
+    child tables -- each is a small number of mostly-scalar values (unlike Contacts/
+    Amenities/Deposits below, which are genuinely repeatable and get their own
+    tables). `short_term_permitted` is a gate above the landlord's permission (doc
+    §1.4 `holiday_home_permitted`): where this is 'no', the unit is blocked from the
+    short-term product line even if the head lease allows it -- enforcement lands
+    with the reservations/product-line-conversion modules, this column just carries
+    the fact now so nothing needs to be retrofitted onto it later.
+    """
 
     __tablename__ = "building"
 
@@ -25,11 +40,111 @@ class Building(AuditableRecord, Base):
     community: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str | None] = mapped_column(String(500))
     makani: Mapped[str | None] = mapped_column(String(50))
+    plot_number: Mapped[str | None] = mapped_column(String(50))
     floors: Mapped[int | None]
     year_built: Mapped[int | None]
+
+    # ---- Restrictions (doc §1.3 "Restrictions") ----
     short_term_permitted: Mapped[str] = mapped_column(String(20), default="yes")  # yes | no | conditional
+    short_term_conditions: Mapped[str | None] = mapped_column(Text)  # free text, when 'conditional'
+    guest_limit: Mapped[int | None]
+    minimum_stay_nights: Mapped[int | None]
+    party_noise_rules: Mapped[str | None] = mapped_column(Text)
+    pet_rules: Mapped[str | None] = mapped_column(Text)
+
+    # ---- Access rules (doc §1.3 "Access rules") ----
+    access_rules: Mapped[str | None] = mapped_column(Text)
+
+    # ---- Move-in permit requirements (doc §1.3, feeds 1.7) ----
+    move_in_permit_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    move_in_permit_trigger_events: Mapped[str | None] = mapped_column(Text)
+    move_in_permit_lead_time_days: Mapped[int | None]
+    move_in_permit_cost: Mapped[float | None] = mapped_column(Numeric(12, 2, asdecimal=False))
+    move_in_permit_deposit_amount: Mapped[float | None] = mapped_column(Numeric(12, 2, asdecimal=False))
+    move_in_permit_deposit_refundable: Mapped[bool | None] = mapped_column(Boolean)
+    move_in_permit_documents_required: Mapped[str | None] = mapped_column(Text)
+    move_in_permit_checklist: Mapped[str | None] = mapped_column(Text)
+    move_in_permit_applied_by: Mapped[str | None] = mapped_column(String(255))
+    move_in_permit_turnaround: Mapped[str | None] = mapped_column(String(255))
+
+    # ---- Parking (doc §1.3 "Parking") ----
+    parking_allocation_basis: Mapped[str | None] = mapped_column(String(255))
+    parking_bays_per_unit: Mapped[int | None]
+    parking_card_required: Mapped[bool | None] = mapped_column(Boolean)
+    parking_cost: Mapped[float | None] = mapped_column(Numeric(12, 2, asdecimal=False))
+    visitor_parking_rules: Mapped[str | None] = mapped_column(Text)
+
+    # ---- Service charges (doc §1.3: "always the landlord's" -- reference only, never a P&L cost) ----
+    service_charges_note: Mapped[str | None] = mapped_column(Text)
+
+    # ---- Building portal / account credentials (doc §1.3) ----
+    portal_system_name: Mapped[str | None] = mapped_column(String(255))
+    portal_username: Mapped[str | None] = mapped_column(String(255))
+    portal_reference_number: Mapped[str | None] = mapped_column(String(100))
+    portal_notes: Mapped[str | None] = mapped_column(Text)
 
     units: Mapped[list["Unit"]] = relationship(back_populates="building")
+
+
+class BuildingContact(AuditableRecord, Base):
+    """doc §1.3 `BuildingContact` -- "the list your operations team needs at 11pm
+    when a guest is locked out." As many as needed per building."""
+
+    __tablename__ = "building_contact"
+
+    building_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("building.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255))
+    # building management | owners association | security | technician | concierge | cleaning | parking | other
+    role: Mapped[str | None] = mapped_column(String(100))
+    company: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(100))
+    email: Mapped[str | None] = mapped_column(String(255))
+    working_hours: Mapped[str | None] = mapped_column(String(255))
+    out_of_hours_contact: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class BuildingAmenity(AuditableRecord, Base):
+    """doc §1.3 `BuildingAmenity` -- "feeds the guest information pack and the
+    check-in task, so it is worth holding properly rather than as one free-text
+    blob." Temporary closure records (date range + reason) are deferred -- cheap to
+    add as a child table later, not built now since nothing consumes them yet
+    (no guest information pack / check-in task exists to feed).
+    """
+
+    __tablename__ = "building_amenity"
+
+    building_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("building.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255))  # pool, gym, sauna, kids' area, BBQ, co-working...
+    operating_hours: Mapped[str | None] = mapped_column(Text)
+    access_method: Mapped[str | None] = mapped_column(String(20))  # card | code | key | open
+    booking_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    guest_access_permitted: Mapped[bool] = mapped_column(Boolean, default=True)
+    rules_notes: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class BuildingDeposit(AuditableRecord, Base):
+    """doc §1.3 "Deposits and fees held with building management" -- refundable
+    deposits (renovation/fit-out, move-in) and non-refundable fees (access/parking
+    card issue) tracked separately "because only one comes back." Feeds the same
+    deposit recovery report as utility and landlord deposits (doc §1.1) once that
+    report exists.
+    """
+
+    __tablename__ = "building_deposit"
+
+    building_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("building.id"), nullable=False)
+    type: Mapped[str] = mapped_column(String(30))  # refundable_deposit | non_refundable_fee
+    description: Mapped[str] = mapped_column(String(255))
+    amount: Mapped[float] = mapped_column(Numeric(12, 2, asdecimal=False))
+    date: Mapped[_date | None] = mapped_column(Date)
+    reference: Mapped[str | None] = mapped_column(String(100))
+    refundable: Mapped[bool] = mapped_column(Boolean, default=False)
+    condition_for_release: Mapped[str | None] = mapped_column(Text)
+    # outstanding | recovered | forfeited | not_applicable
+    recovery_status: Mapped[str] = mapped_column(String(20), default="outstanding")
 
 
 class Counterparty(AuditableRecord, Base):

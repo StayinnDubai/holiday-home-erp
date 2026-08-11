@@ -8,7 +8,15 @@ export type FieldType =
   /** Single FK picked from another resource's list, e.g. a unit's building. */
   | 'relation-select'
   /** Many-to-many picked from another resource's list, e.g. a unit's landlords. */
-  | 'relation-multiselect';
+  | 'relation-multiselect'
+  /** A date that can be set two ways ("Set manually" / "Reconcile from bank
+   * statement"), tagging a sibling field (`sourceFieldKey`) with which one was
+   * used -- e.g. a cheque's actual drawdown date. */
+  | 'action-date'
+  /** Upload/gallery panel for files attached to this record via the generic
+   * attachments endpoint (doc §5.3) -- e.g. a cheque's photo. Only renders once
+   * the record has been saved (needs a real id to attach to). */
+  | 'attachments';
 
 export interface SelectOption {
   label: string;
@@ -35,6 +43,13 @@ export interface EntityFieldConfig {
   relationCreateFields?: EntityFieldConfig[];
   /** Label for the quick-create option/dialog, e.g. "Building". Defaults to the field's label. */
   relationCreateLabel?: string;
+  /** For 'action-date': the sibling field key that records how the date was set
+   * ('manual' | 'bank_reconciliation'). Given a control automatically -- does not
+   * need its own entry in `fields` unless you also want it as a grid column. */
+  sourceFieldKey?: string;
+  /** For 'attachments': the `entity_type` string this record's files are filed
+   * under on the backend (e.g. 'cheque'), matching Attachment.entity_type. */
+  attachmentEntityType?: string;
   /** ag-Grid column width in px. Omit to let the grid auto-size / flex. */
   gridWidth?: number;
   /** Defaults to true. Set false to keep a field (e.g. an id) out of the grid. */

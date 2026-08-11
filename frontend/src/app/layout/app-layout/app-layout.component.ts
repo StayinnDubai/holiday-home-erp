@@ -126,6 +126,9 @@ export class AppLayoutComponent implements OnInit {
       items: [
         { label: 'Units', routerLink: '/units' },
         { label: 'Buildings', routerLink: '/buildings' },
+        { label: 'Building Contacts', routerLink: '/buildings/contacts' },
+        { label: 'Building Amenities', routerLink: '/buildings/amenities' },
+        { label: 'Building Deposits & Fees', routerLink: '/buildings/deposits' },
         { label: 'Landlords & Counterparties', routerLink: '/counterparties' },
         { label: 'Tenancy Contracts', routerLink: '/contracts/tenancy' },
         { label: 'Ejari Registrations', routerLink: '/contracts/tenancy/ejari' },
@@ -170,6 +173,7 @@ export class AppLayoutComponent implements OnInit {
         { label: 'Cheque Ledger', routerLink: '/accounting/cheque-ledger' },
         { label: 'Cash Ledger', routerLink: '/accounting/cash-ledger' },
         { label: 'Invoices', routerLink: '/accounting/invoices' },
+        { label: 'Bank Statement', routerLink: '/accounting/bank-statement' },
       ],
     },
     {

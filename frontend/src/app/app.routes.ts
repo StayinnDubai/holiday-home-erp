@@ -3,7 +3,7 @@ import { AppLayoutComponent } from './layout/app-layout/app-layout.component';
 import { PlaceholderComponent } from './shared/placeholder/placeholder.component';
 
 import { UNITS_CONFIG } from './features/units/units.config';
-import { BUILDINGS_CONFIG } from './features/buildings/buildings.config';
+import { BUILDINGS_CONFIG, BUILDING_CONTACTS_CONFIG, BUILDING_AMENITIES_CONFIG, BUILDING_DEPOSITS_CONFIG } from './features/buildings/buildings.config';
 import { COUNTERPARTIES_CONFIG } from './features/counterparties/counterparties.config';
 import { TENANCY_CONTRACTS_CONFIG, EJARI_REGISTRATIONS_CONFIG, RENTAL_AGREEMENTS_CONFIG } from './features/contracts/contracts.config';
 import { DTCM_PERMITS_CONFIG, MOVE_IN_PERMITS_CONFIG } from './features/permits/permits.config';
@@ -17,6 +17,7 @@ import {
   CHEQUE_LEDGER_CONFIG,
   CASH_LEDGER_CONFIG,
   INVOICES_CONFIG,
+  BANK_STATEMENT_CONFIG,
 } from './features/accounting/accounting.config';
 import {
   NUMBERING_CONFIG,
@@ -36,9 +37,10 @@ import {
  * nothing -- EntityPageComponent itself still lazy-loads via `loadComponent`.
  *
  * Left as PlaceholderComponent: Dashboard (needs real modules to build tiles from),
- * calendar/board views (different UI paradigm, layered on the same data later), the
- * read-only report screens (not CRUD entities), and Settings > Company (a single record,
- * not a list -- doesn't fit the add/edit/delete grid pattern).
+ * calendar/board views (different UI paradigm, layered on the same data later), and the
+ * read-only report screens (not CRUD entities). Settings > Company is the one exception
+ * to the generic-page rule that's actually built: a single record, not a list, so it
+ * gets its own CompanySettingsComponent instead of EntityPageComponent.
  *
  * No auth/role guards in v1 (plan §7) -- every route is reachable by anyone.
  */
@@ -59,6 +61,9 @@ export const routes: Routes = [
       // ---- General ----
       { path: 'units', loadComponent: loadEntityPage, data: { title: 'Units', config: UNITS_CONFIG } },
       { path: 'buildings', loadComponent: loadEntityPage, data: { title: 'Buildings', config: BUILDINGS_CONFIG } },
+      { path: 'buildings/contacts', loadComponent: loadEntityPage, data: { title: 'Building Contacts', config: BUILDING_CONTACTS_CONFIG } },
+      { path: 'buildings/amenities', loadComponent: loadEntityPage, data: { title: 'Building Amenities', config: BUILDING_AMENITIES_CONFIG } },
+      { path: 'buildings/deposits', loadComponent: loadEntityPage, data: { title: 'Building Deposits & Fees', config: BUILDING_DEPOSITS_CONFIG } },
       { path: 'counterparties', loadComponent: loadEntityPage, data: { title: 'Landlords & Counterparties', config: COUNTERPARTIES_CONFIG } },
       { path: 'contracts/tenancy', loadComponent: loadEntityPage, data: { title: 'Tenancy Contracts', config: TENANCY_CONTRACTS_CONFIG } },
       { path: 'contracts/tenancy/ejari', loadComponent: loadEntityPage, data: { title: 'Ejari Registrations', config: EJARI_REGISTRATIONS_CONFIG } },
@@ -87,6 +92,7 @@ export const routes: Routes = [
       { path: 'accounting/cheque-ledger', loadComponent: loadEntityPage, data: { title: 'Cheque Ledger', config: CHEQUE_LEDGER_CONFIG } },
       { path: 'accounting/cash-ledger', loadComponent: loadEntityPage, data: { title: 'Cash Ledger', config: CASH_LEDGER_CONFIG } },
       { path: 'accounting/invoices', loadComponent: loadEntityPage, data: { title: 'Invoices', config: INVOICES_CONFIG } },
+      { path: 'accounting/bank-statement', loadComponent: loadEntityPage, data: { title: 'Bank Statement', config: BANK_STATEMENT_CONFIG } },
 
       // ---- Financial Reports (all read-only, not CRUD entities) ----
       { path: 'reports/pnl', loadComponent: () => PlaceholderComponent, data: { title: 'P&L' } },
@@ -97,7 +103,11 @@ export const routes: Routes = [
       { path: 'reports/cheque-position', loadComponent: () => PlaceholderComponent, data: { title: 'Cheque Position' } },
 
       // ---- Settings ----
-      { path: 'settings/company', loadComponent: () => PlaceholderComponent, data: { title: 'Company', note: 'Single company record (doc §7) -- an edit form, not a list; different pattern from the grids elsewhere.' } },
+      {
+        path: 'settings/company',
+        loadComponent: () => import('./features/settings/company-settings.component').then((m) => m.CompanySettingsComponent),
+        data: { title: 'Company' },
+      },
       { path: 'settings/numbering', loadComponent: loadEntityPage, data: { title: 'Numbering', config: NUMBERING_CONFIG } },
       { path: 'settings/tax-codes', loadComponent: loadEntityPage, data: { title: 'Tax Codes', config: TAX_CODES_CONFIG } },
       { path: 'settings/setup-cost-types', loadComponent: loadEntityPage, data: { title: 'Setup Cost Types', config: SETUP_COST_TYPES_CONFIG } },
