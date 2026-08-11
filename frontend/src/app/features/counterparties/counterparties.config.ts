@@ -1,4 +1,5 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { COUNTERPARTY_GROUPS_CONFIG } from './counterparty-groups.config';
 
 /** Single master for landlords/tenants/suppliers/agents/OTAs (plan §3.2 `counterparty`,
  * doc §2.6) -- one record can hold multiple roles, hence `roles` being free text (comma-
@@ -31,5 +32,15 @@ export const COUNTERPARTIES_CONFIG: EntityPageConfig = {
     { key: 'trn', label: 'TRN', type: 'text' },
     { key: 'emirates_id', label: 'Emirates ID', type: 'text' },
     { key: 'hold_flag', label: 'On hold', type: 'boolean', gridWidth: 100 },
+    {
+      key: 'group_id',
+      label: 'Counterparty group',
+      type: 'relation-select',
+      relationResourcePath: 'counterparty-groups',
+      relationLabelKey: 'name',
+      relationCreateFields: COUNTERPARTY_GROUPS_CONFIG.fields,
+      showInGrid: false,
+    },
+    { key: 'group_name', label: 'Group', type: 'text', showInForm: false, gridWidth: 160 },
   ],
 };

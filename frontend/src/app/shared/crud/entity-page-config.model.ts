@@ -16,7 +16,19 @@ export type FieldType =
   /** Upload/gallery panel for files attached to this record via the generic
    * attachments endpoint (doc §5.3) -- e.g. a cheque's photo. Only renders once
    * the record has been saved (needs a real id to attach to). */
-  | 'attachments';
+  | 'attachments'
+  /** Row-per-document list (name + attached date, view/edit/delete) for files
+   * attached to this record -- e.g. a tenancy contract's contract/addendum
+   * documents. Only renders once the record has been saved. */
+  | 'attachments-list'
+  /** Unit layout components (bedroom, bathroom, kitchen, balcony...) -- a small
+   * inline add/edit/delete list scoped to the unit being edited. Only renders
+   * once the record has been saved. */
+  | 'unit-spaces'
+  /** Read-only "what links to this unit" panel (landlord, tenancy contract,
+   * Ejari, DTCM permit, move-in permit, rental agreement). Only renders once the
+   * record has been saved. */
+  | 'related-records';
 
 export interface SelectOption {
   label: string;
@@ -47,9 +59,15 @@ export interface EntityFieldConfig {
    * ('manual' | 'bank_reconciliation'). Given a control automatically -- does not
    * need its own entry in `fields` unless you also want it as a grid column. */
   sourceFieldKey?: string;
-  /** For 'attachments': the `entity_type` string this record's files are filed
-   * under on the backend (e.g. 'cheque'), matching Attachment.entity_type. */
+  /** For 'attachments' / 'attachments-list': the `entity_type` string this
+   * record's files are filed under on the backend (e.g. 'cheque'), matching
+   * Attachment.entity_type. */
   attachmentEntityType?: string;
+  /** Only render/require this field when another field's value matches. e.g. a
+   * building's "short-term conditions" textarea only makes sense when
+   * short_term_permitted = 'conditional'. Evaluated live against the form's
+   * current values, not just the loaded record. */
+  visibleWhen?: { field: string; equals: unknown };
   /** ag-Grid column width in px. Omit to let the grid auto-size / flex. */
   gridWidth?: number;
   /** Defaults to true. Set false to keep a field (e.g. an id) out of the grid. */

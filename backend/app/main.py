@@ -16,10 +16,14 @@ from app.routers import (
     comments,
     company,
     counterparties,
+    counterparty_groups,
     ejari_registrations,
+    inventory_items,
+    inventory_movements,
     reference_lists,
     settings_,
     tenancy_contracts,
+    unit_spaces,
     units,
 )
 
@@ -53,13 +57,17 @@ app.include_router(building_contacts.router, prefix=API_PREFIX)
 app.include_router(building_amenities.router, prefix=API_PREFIX)
 app.include_router(building_deposits.router, prefix=API_PREFIX)
 app.include_router(counterparties.router, prefix=API_PREFIX)
+app.include_router(counterparty_groups.router, prefix=API_PREFIX)
 app.include_router(units.router, prefix=API_PREFIX)
+app.include_router(unit_spaces.router, prefix=API_PREFIX)
 app.include_router(tenancy_contracts.router, prefix=API_PREFIX)
 app.include_router(ejari_registrations.router, prefix=API_PREFIX)
 app.include_router(cheques.router, prefix=API_PREFIX)
 app.include_router(bank_statement.router, prefix=API_PREFIX)
 app.include_router(company.router, prefix=API_PREFIX)
 app.include_router(accounts.router, prefix=API_PREFIX)
+app.include_router(inventory_items.router, prefix=API_PREFIX)
+app.include_router(inventory_movements.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

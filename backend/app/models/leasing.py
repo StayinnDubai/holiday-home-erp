@@ -30,17 +30,31 @@ class TenancyContract(AuditableRecord, Base):
     contract_type: Mapped[str] = mapped_column(String(20), default="new")  # new | renewal
     renewal_of_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenancy_contract.id"))
 
+    contract_date: Mapped[date | None] = mapped_column(Date)  # date the contract itself is dated/signed
     start_date: Mapped[date] = mapped_column(Date)
     end_date: Mapped[date] = mapped_column(Date)
     total_annual_rent: Mapped[float] = mapped_column(Numeric(14, 2, asdecimal=False))
     instalment_count: Mapped[int] = mapped_column(default=1)
     payment_method: Mapped[str] = mapped_column(String(20), default="cheque")  # cheque | transfer
 
+    # Grace period (doc §1.4 point 2, "as-incurred zero-cost months" -- on the
+    # contract itself; EjariRegistration carries its own copy verbatim as registered).
+    grace_period_start_date: Mapped[date | None] = mapped_column(Date)
+    grace_period_end_date: Mapped[date | None] = mapped_column(Date)
+
     security_deposit_amount: Mapped[float | None] = mapped_column(Numeric(14, 2, asdecimal=False))
+    agency_name: Mapped[str | None] = mapped_column(String(255))
     agency_fee_amount: Mapped[float | None] = mapped_column(Numeric(14, 2, asdecimal=False))
     agency_fee_vat_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
+    agency_renewal_charge_amount: Mapped[float | None] = mapped_column(Numeric(14, 2, asdecimal=False))
+
+    landlord_maintenance_threshold: Mapped[float | None] = mapped_column(Numeric(14, 2, asdecimal=False))
 
     notice_period_days: Mapped[int | None]
+    vacating_notice_period_days: Mapped[int | None]
+    renewal_notice_period_days: Mapped[int | None]
+    early_termination_notice_days: Mapped[int | None]
+    early_termination_penalty_amount: Mapped[float | None] = mapped_column(Numeric(14, 2, asdecimal=False))
 
     # Hard gates (doc §1.4 "Landlord permissions"). Enforcement of what they gate
     # (short-term product line / DTCM permits / rental agreements) lands with those

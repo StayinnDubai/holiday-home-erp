@@ -174,6 +174,9 @@ export class AppLayoutComponent implements OnInit {
         { label: 'Cash Ledger', routerLink: '/accounting/cash-ledger' },
         { label: 'Invoices', routerLink: '/accounting/invoices' },
         { label: 'Bank Statement', routerLink: '/accounting/bank-statement' },
+        { label: 'Counterparty Group', routerLink: '/accounting/counterparty-groups' },
+        { label: 'Inventory Items', routerLink: '/accounting/inventory-items' },
+        { label: 'Inventory Movements', routerLink: '/accounting/inventory-movements' },
       ],
     },
     {

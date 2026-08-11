@@ -38,6 +38,7 @@ class Building(AuditableRecord, Base):
     name: Mapped[str] = mapped_column(String(255))
     developer: Mapped[str | None] = mapped_column(String(255))
     community: Mapped[str | None] = mapped_column(String(255))
+    area: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str | None] = mapped_column(String(500))
     makani: Mapped[str | None] = mapped_column(String(50))
     plot_number: Mapped[str | None] = mapped_column(String(50))
@@ -47,8 +48,6 @@ class Building(AuditableRecord, Base):
     # ---- Restrictions (doc §1.3 "Restrictions") ----
     short_term_permitted: Mapped[str] = mapped_column(String(20), default="yes")  # yes | no | conditional
     short_term_conditions: Mapped[str | None] = mapped_column(Text)  # free text, when 'conditional'
-    guest_limit: Mapped[int | None]
-    minimum_stay_nights: Mapped[int | None]
     party_noise_rules: Mapped[str | None] = mapped_column(Text)
     pet_rules: Mapped[str | None] = mapped_column(Text)
 
@@ -147,6 +146,24 @@ class BuildingDeposit(AuditableRecord, Base):
     recovery_status: Mapped[str] = mapped_column(String(20), default="outstanding")
 
 
+class CounterpartyGroup(AuditableRecord, Base):
+    """Accounting > Counterparty Group -- a manually-maintained classification for
+    counterparties (e.g. "Landlords - Downtown", "OTA channels", "Utility suppliers").
+    Purely organisational: no commercial terms live here, same principle the doc
+    already applies to the landlord record itself (doc §1.2 "no commercial terms are
+    ever stored on a landlord").
+    """
+
+    __tablename__ = "counterparty_group"
+
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    members: Mapped[list["Counterparty"]] = relationship(back_populates="group")
+
+
 class Counterparty(AuditableRecord, Base):
     """Plan §3.2 `counterparty` (doc §2.6) -- single master for landlord/tenant/
     supplier/agent/OTA. `roles` is stored as a comma-separated string in this pass
@@ -161,14 +178,22 @@ class Counterparty(AuditableRecord, Base):
     trn: Mapped[str | None] = mapped_column(String(50))
     emirates_id: Mapped[str | None] = mapped_column(String(50))
     hold_flag: Mapped[bool] = mapped_column(default=False)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("counterparty_group.id"))
 
     unit_links: Mapped[list["UnitLandlord"]] = relationship(back_populates="landlord")
+    group: Mapped["CounterpartyGroup | None"] = relationship(back_populates="members")
 
 
 class Unit(AuditableRecord, Base):
     """Plan §3.2 `unit` -- header fields only. Exactly one building (mandatory FK);
     one-or-more landlords via `UnitLandlord` (doc §1.1: a unit may have several
-    co-owners). `unit_code` is server-generated (NumberingService), never client-set."""
+    co-owners). `unit_code` is server-generated (NumberingService), never client-set.
+
+    `floor_number`/`apartment_number` are the physical identifiers on the door and
+    the title deed -- distinct from `unit_code` (this system's own sequential ID)
+    and from `unit_name` (a free-text label). Areas are in square metres throughout
+    (not sqft), matching the title deed / Ejari convention in Dubai.
+    """
 
     __tablename__ = "unit"
 
@@ -176,15 +201,26 @@ class Unit(AuditableRecord, Base):
     unit_name: Mapped[str] = mapped_column(String(255))
     building_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("building.id"), nullable=False)
     type: Mapped[str | None] = mapped_column(String(20))
+    property_type: Mapped[str | None] = mapped_column(String(30))  # apartment | villa | townhouse | penthouse | other
+    floor_number: Mapped[str | None] = mapped_column(String(50))
+    apartment_number: Mapped[str | None] = mapped_column(String(50))
+    parking_number: Mapped[str | None] = mapped_column(String(50))
     bathrooms: Mapped[int | None]
     max_occupancy: Mapped[int | None]
-    area_sqft: Mapped[float | None] = mapped_column(Numeric(10, 2, asdecimal=False))
+    area_sqm: Mapped[float | None] = mapped_column(Numeric(10, 2, asdecimal=False))
+    suite_area_sqm: Mapped[float | None] = mapped_column(Numeric(10, 2, asdecimal=False))
+    has_balcony: Mapped[bool] = mapped_column(Boolean, default=False)
+    balcony_area_sqm: Mapped[float | None] = mapped_column(Numeric(10, 2, asdecimal=False))
+    furnished_status: Mapped[str | None] = mapped_column(String(20))  # furnished | unfurnished
+    title_deed_number: Mapped[str | None] = mapped_column(String(100))
+    dewa_premises_number: Mapped[str | None] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(20), default="active")
     handover_date: Mapped[date | None] = mapped_column(Date)
     first_live_date: Mapped[date | None] = mapped_column(Date)
 
     building: Mapped[Building] = relationship(back_populates="units")
     landlord_links: Mapped[list["UnitLandlord"]] = relationship(back_populates="unit", cascade="all, delete-orphan")
+    spaces: Mapped[list["UnitSpace"]] = relationship(back_populates="unit", cascade="all, delete-orphan")
 
 
 class UnitLandlord(Base):
@@ -202,3 +238,24 @@ class UnitLandlord(Base):
 
     unit: Mapped[Unit] = relationship(back_populates="landlord_links")
     landlord: Mapped[Counterparty] = relationship(back_populates="unit_links")
+
+
+class UnitSpace(AuditableRecord, Base):
+    """Plan's original `UnitSpace` (doc §1.1) -- one record per physical space in a
+    unit (bedroom, bathroom, living room, kitchen, laundry area, balcony, storage...),
+    "so a physical verification can be done room by room." Deferred until now
+    because nothing consumed it yet; kept deliberately simple (no sort order / space
+    code / active flag) versus the doc's fuller spec, since the only consumer today
+    is a plain add/edit/delete list on the unit's edit view, not room-level
+    inventory or asset tracking.
+    """
+
+    __tablename__ = "unit_space"
+
+    unit_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("unit.id"), nullable=False)
+    # bedroom | bathroom | living_room | kitchen | laundry_area | balcony | storage | dining_room | office | other
+    space_type: Mapped[str] = mapped_column(String(30))
+    name: Mapped[str | None] = mapped_column(String(255))  # e.g. "Bedroom 1", optional
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    unit: Mapped[Unit] = relationship(back_populates="spaces")

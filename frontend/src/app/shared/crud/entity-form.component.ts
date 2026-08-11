@@ -13,6 +13,9 @@ import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { CrudApiService } from '../../core/api/crud-api.service';
 import { AttachmentsFieldComponent } from './attachments-field.component';
+import { AttachmentsListComponent } from './attachments-list.component';
+import { RelatedRecordsFieldComponent } from './related-records-field.component';
+import { UnitSpacesFieldComponent } from './unit-spaces-field.component';
 import { EntityFieldConfig, SelectOption } from './entity-page-config.model';
 
 function requiredArray(control: AbstractControl): ValidationErrors | null {
@@ -51,10 +54,13 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
     TextareaModule,
     EntityFormComponent,
     AttachmentsFieldComponent,
+    AttachmentsListComponent,
+    RelatedRecordsFieldComponent,
+    UnitSpacesFieldComponent,
   ],
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" class="entity-form">
-      <div class="entity-form__field" *ngFor="let field of formFields">
+      <div class="entity-form__field" *ngFor="let field of formFields" [hidden]="!isFieldVisible(field)">
         <label [for]="field.key">{{ field.label }}<span *ngIf="field.required" class="req">*</span></label>
 
         <input
@@ -168,6 +174,38 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
             <p class="entity-form__hint">Save the record first, then reopen it to attach a file.</p>
           </ng-template>
         </div>
+
+        <div *ngIf="field.type === 'attachments-list'">
+          <app-attachments-list
+            *ngIf="modelId; else attachmentsListUnsaved"
+            [entityType]="field.attachmentEntityType || ''"
+            [entityId]="modelId"
+          />
+          <ng-template #attachmentsListUnsaved>
+            <p class="entity-form__hint">Save the record first, then reopen it to attach documents.</p>
+          </ng-template>
+        </div>
+
+        <div *ngIf="field.type === 'unit-spaces'">
+          <app-unit-spaces-field
+            *ngIf="modelId; else unitSpacesUnsaved"
+            [unitId]="modelId"
+          />
+          <ng-template #unitSpacesUnsaved>
+            <p class="entity-form__hint">Save the unit first, then reopen it to add layout components.</p>
+          </ng-template>
+        </div>
+
+        <div *ngIf="field.type === 'related-records'">
+          <app-related-records-field
+            *ngIf="modelId; else relatedRecordsUnsaved"
+            [unitId]="modelId"
+            [landlordNames]="modelField('landlord_names')"
+          />
+          <ng-template #relatedRecordsUnsaved>
+            <p class="entity-form__hint">Save the unit first, then reopen it to see linked records.</p>
+          </ng-template>
+        </div>
       </div>
 
       <div class="entity-form__actions">
@@ -278,6 +316,23 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
    * 'attachments' fields need this to know whether they have anything to attach to. */
   get modelId(): string {
     return this.model ? String((this.model as Record<string, unknown>)['id'] ?? '') : '';
+  }
+
+  /** Raw value of any field on the loaded record, e.g. a unit's `landlord_names`
+   * for the related-records panel -- doesn't need its own typed @Input plumbing
+   * for every one-off case like this. */
+  modelField(key: string): string | null {
+    if (!this.model) return null;
+    const value = (this.model as Record<string, unknown>)[key];
+    return value == null ? null : String(value);
+  }
+
+  /** `visibleWhen` fields (e.g. a building's short-term conditions, only relevant
+   * when short_term_permitted = 'conditional') read live off the form, not the
+   * loaded record, so toggling the dropdown shows/hides the field immediately. */
+  isFieldVisible(field: EntityFieldConfig): boolean {
+    if (!field.visibleWhen) return true;
+    return this.form.get(field.visibleWhen.field)?.value === field.visibleWhen.equals;
   }
 
   ngOnChanges(changes: SimpleChanges): void {

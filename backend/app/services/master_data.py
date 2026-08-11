@@ -11,8 +11,10 @@ from app.models.master_data import (
     BuildingContact,
     BuildingDeposit,
     Counterparty,
+    CounterpartyGroup,
     Unit,
     UnitLandlord,
+    UnitSpace,
 )
 from app.schemas.master_data import (
     BuildingAmenityCreate,
@@ -24,8 +26,12 @@ from app.schemas.master_data import (
     BuildingDepositUpdate,
     BuildingUpdate,
     CounterpartyCreate,
+    CounterpartyGroupCreate,
+    CounterpartyGroupUpdate,
     CounterpartyUpdate,
     UnitCreate,
+    UnitSpaceCreate,
+    UnitSpaceUpdate,
     UnitUpdate,
 )
 from app.services.audit import AuditService
@@ -330,6 +336,8 @@ class CounterpartyService:
 
     @staticmethod
     def create(db: Session, payload: CounterpartyCreate) -> Counterparty:
+        if payload.group_id is not None:
+            CounterpartyService._validate_group(db, payload.group_id)
         row = Counterparty(**payload.model_dump())
         db.add(row)
         db.flush()
@@ -344,7 +352,10 @@ class CounterpartyService:
         row = db.get(Counterparty, counterparty_id)
         if row is None or row.is_deleted:
             raise ApiError("Counterparty not found.", code="not_found", status_code=404)
-        for field, value in payload.model_dump(exclude_unset=True).items():
+        data = payload.model_dump(exclude_unset=True)
+        if data.get("group_id") is not None:
+            CounterpartyService._validate_group(db, data["group_id"])
+        for field, value in data.items():
             setattr(row, field, value)
         AuditService.log(db, entity_type="counterparty", entity_id=row.id, action="update")
         db.commit()
@@ -368,6 +379,12 @@ class CounterpartyService:
         db.commit()
 
     @staticmethod
+    def _validate_group(db: Session, group_id: uuid.UUID) -> None:
+        group = db.get(CounterpartyGroup, group_id)
+        if group is None or group.is_deleted:
+            raise ApiError("Selected counterparty group does not exist.", code="invalid_reference", status_code=400)
+
+    @staticmethod
     def _attach_unit_counts(db: Session, rows: list[Counterparty]) -> None:
         if not rows:
             return
@@ -380,8 +397,100 @@ class CounterpartyService:
                 .group_by(UnitLandlord.landlord_id)
             ).all()
         )
+        group_ids = [r.group_id for r in rows if r.group_id]
+        group_names: dict[uuid.UUID, str] = {}
+        if group_ids:
+            group_names = {g.id: g.name for g in db.scalars(select(CounterpartyGroup).where(CounterpartyGroup.id.in_(group_ids))).all()}
         for r in rows:
             r.unit_count = counts.get(r.id, 0)
+            r.group_name = group_names.get(r.group_id) if r.group_id else None
+
+
+# ---------------------------------------------------------------------------
+# Counterparty groups (Accounting > Counterparty Group)
+# ---------------------------------------------------------------------------
+class CounterpartyGroupService:
+    @staticmethod
+    def list_page(db: Session, params: PaginationParams) -> tuple[list[CounterpartyGroup], int]:
+        stmt = select(CounterpartyGroup).where(CounterpartyGroup.is_deleted.is_(False))
+        if params.q:
+            stmt = stmt.where(CounterpartyGroup.name.ilike(f"%{params.q}%") | CounterpartyGroup.code.ilike(f"%{params.q}%"))
+        col = _sort_col(CounterpartyGroup, params.sort_by, CounterpartyGroup.code)
+        stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
+        rows, total = paginate(db, stmt, params)
+        CounterpartyGroupService._attach_counterparty_counts(db, rows)
+        return rows, total
+
+    @staticmethod
+    def get(db: Session, group_id: uuid.UUID) -> CounterpartyGroup:
+        row = db.get(CounterpartyGroup, group_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Counterparty group not found.", code="not_found", status_code=404)
+        CounterpartyGroupService._attach_counterparty_counts(db, [row])
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: CounterpartyGroupCreate) -> CounterpartyGroup:
+        CounterpartyGroupService._validate_unique_code(db, payload.code)
+        row = CounterpartyGroup(**payload.model_dump())
+        db.add(row)
+        db.flush()
+        AuditService.log(db, entity_type="counterparty_group", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        CounterpartyGroupService._attach_counterparty_counts(db, [row])
+        return row
+
+    @staticmethod
+    def update(db: Session, group_id: uuid.UUID, payload: CounterpartyGroupUpdate) -> CounterpartyGroup:
+        row = db.get(CounterpartyGroup, group_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Counterparty group not found.", code="not_found", status_code=404)
+        data = payload.model_dump(exclude_unset=True)
+        if "code" in data and data["code"] != row.code:
+            CounterpartyGroupService._validate_unique_code(db, data["code"])
+        for field, value in data.items():
+            setattr(row, field, value)
+        AuditService.log(db, entity_type="counterparty_group", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        CounterpartyGroupService._attach_counterparty_counts(db, [row])
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, group_id: uuid.UUID) -> None:
+        row = db.get(CounterpartyGroup, group_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Counterparty group not found.", code="not_found", status_code=404)
+        in_use = db.scalar(
+            select(func.count()).select_from(Counterparty).where(Counterparty.group_id == group_id, Counterparty.is_deleted.is_(False))
+        )
+        if in_use:
+            raise ApiError("Cannot delete a group that still has counterparties assigned to it.", code="in_use", status_code=409)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="counterparty_group", entity_id=row.id, action="delete")
+        db.commit()
+
+    @staticmethod
+    def _validate_unique_code(db: Session, code: str) -> None:
+        existing = db.scalar(select(CounterpartyGroup.id).where(CounterpartyGroup.code == code, CounterpartyGroup.is_deleted.is_(False)))
+        if existing:
+            raise ApiError(f"Counterparty group code '{code}' is already in use.", code="duplicate_code", status_code=409)
+
+    @staticmethod
+    def _attach_counterparty_counts(db: Session, rows: list[CounterpartyGroup]) -> None:
+        if not rows:
+            return
+        ids = [r.id for r in rows]
+        counts = dict(
+            db.execute(
+                select(Counterparty.group_id, func.count())
+                .where(Counterparty.group_id.in_(ids), Counterparty.is_deleted.is_(False))
+                .group_by(Counterparty.group_id)
+            ).all()
+        )
+        for r in rows:
+            r.counterparty_count = counts.get(r.id, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -506,3 +615,60 @@ class UnitService:
             r.building_name = buildings.get(r.building_id)
             r.landlord_ids = ids_by_unit.get(r.id, [])
             r.landlord_names = ", ".join(names_by_unit.get(r.id, []))
+
+
+# ---------------------------------------------------------------------------
+# Unit spaces (layout components, doc §1.1 `UnitSpace`)
+# ---------------------------------------------------------------------------
+class UnitSpaceService:
+    @staticmethod
+    def list_page(db: Session, params: PaginationParams, unit_id: uuid.UUID | None = None) -> tuple[list[UnitSpace], int]:
+        stmt = select(UnitSpace).where(UnitSpace.is_deleted.is_(False))
+        if unit_id is not None:
+            stmt = stmt.where(UnitSpace.unit_id == unit_id)
+        if params.q:
+            stmt = stmt.where(UnitSpace.name.ilike(f"%{params.q}%"))
+        col = _sort_col(UnitSpace, params.sort_by, UnitSpace.space_type)
+        stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
+        return paginate(db, stmt, params)
+
+    @staticmethod
+    def get(db: Session, space_id: uuid.UUID) -> UnitSpace:
+        row = db.get(UnitSpace, space_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Unit space not found.", code="not_found", status_code=404)
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: UnitSpaceCreate) -> UnitSpace:
+        unit = db.get(Unit, payload.unit_id)
+        if unit is None or unit.is_deleted:
+            raise ApiError("Selected unit does not exist.", code="invalid_reference", status_code=400)
+        row = UnitSpace(**payload.model_dump())
+        db.add(row)
+        db.flush()
+        AuditService.log(db, entity_type="unit_space", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def update(db: Session, space_id: uuid.UUID, payload: UnitSpaceUpdate) -> UnitSpace:
+        row = db.get(UnitSpace, space_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Unit space not found.", code="not_found", status_code=404)
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(row, field, value)
+        AuditService.log(db, entity_type="unit_space", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, space_id: uuid.UUID) -> None:
+        row = db.get(UnitSpace, space_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Unit space not found.", code="not_found", status_code=404)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="unit_space", entity_id=row.id, action="delete")
+        db.commit()

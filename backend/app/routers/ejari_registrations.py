@@ -13,8 +13,12 @@ router = APIRouter(prefix="/ejari-registrations", tags=["ejari-registrations"])
 
 
 @router.get("", response_model=ListResponse[EjariRegistrationOut])
-def list_ejari_registrations(db: Session = Depends(get_db), params: PaginationParams = Depends(pagination_params)):
-    rows, total = EjariRegistrationService.list_page(db, params)
+def list_ejari_registrations(
+    unit_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    params: PaginationParams = Depends(pagination_params),
+):
+    rows, total = EjariRegistrationService.list_page(db, params, unit_id=unit_id)
     return ListResponse(data=rows, meta=ListMeta(page=params.page, page_size=params.page_size, total=total))
 
 

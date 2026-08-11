@@ -5,6 +5,8 @@ import { PlaceholderComponent } from './shared/placeholder/placeholder.component
 import { UNITS_CONFIG } from './features/units/units.config';
 import { BUILDINGS_CONFIG, BUILDING_CONTACTS_CONFIG, BUILDING_AMENITIES_CONFIG, BUILDING_DEPOSITS_CONFIG } from './features/buildings/buildings.config';
 import { COUNTERPARTIES_CONFIG } from './features/counterparties/counterparties.config';
+import { COUNTERPARTY_GROUPS_CONFIG } from './features/counterparties/counterparty-groups.config';
+import { INVENTORY_ITEMS_CONFIG, INVENTORY_MOVEMENTS_CONFIG } from './features/inventory/inventory.config';
 import { TENANCY_CONTRACTS_CONFIG, EJARI_REGISTRATIONS_CONFIG, RENTAL_AGREEMENTS_CONFIG } from './features/contracts/contracts.config';
 import { DTCM_PERMITS_CONFIG, MOVE_IN_PERMITS_CONFIG } from './features/permits/permits.config';
 import { CONVERSIONS_CONFIG } from './features/conversions/conversions.config';
@@ -93,6 +95,9 @@ export const routes: Routes = [
       { path: 'accounting/cash-ledger', loadComponent: loadEntityPage, data: { title: 'Cash Ledger', config: CASH_LEDGER_CONFIG } },
       { path: 'accounting/invoices', loadComponent: loadEntityPage, data: { title: 'Invoices', config: INVOICES_CONFIG } },
       { path: 'accounting/bank-statement', loadComponent: loadEntityPage, data: { title: 'Bank Statement', config: BANK_STATEMENT_CONFIG } },
+      { path: 'accounting/counterparty-groups', loadComponent: loadEntityPage, data: { title: 'Counterparty Group', config: COUNTERPARTY_GROUPS_CONFIG } },
+      { path: 'accounting/inventory-items', loadComponent: loadEntityPage, data: { title: 'Inventory Items', config: INVENTORY_ITEMS_CONFIG } },
+      { path: 'accounting/inventory-movements', loadComponent: loadEntityPage, data: { title: 'Inventory Movements', config: INVENTORY_MOVEMENTS_CONFIG } },
 
       // ---- Financial Reports (all read-only, not CRUD entities) ----
       { path: 'reports/pnl', loadComponent: () => PlaceholderComponent, data: { title: 'P&L' } },

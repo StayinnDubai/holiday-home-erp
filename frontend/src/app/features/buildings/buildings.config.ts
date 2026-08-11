@@ -1,4 +1,15 @@
-import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { EntityPageConfig, SelectOption } from '../../shared/crud/entity-page-config.model';
+
+/** Year-built is a bounded, pick-from-a-list field rather than a free number --
+ * generated once here rather than hard-coded, so it never needs manual upkeep. */
+function yearOptions(from = 1970): SelectOption[] {
+  const currentYear = new Date().getFullYear();
+  const years: SelectOption[] = [];
+  for (let y = currentYear + 2; y >= from; y--) {
+    years.push({ label: String(y), value: String(y) });
+  }
+  return years;
+}
 
 /** Header fields (plan §3.2 `building` table / doc §1.3), plus `unit_count` -- a
  * backend-computed column (count of units with this building_id) proving the
@@ -19,12 +30,13 @@ export const BUILDINGS_CONFIG: EntityPageConfig = {
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 220 },
     { key: 'unit_count', label: 'Units', type: 'number', showInForm: false, gridWidth: 90 },
     { key: 'developer', label: 'Developer', type: 'text' },
-    { key: 'community', label: 'Community / area', type: 'text' },
+    { key: 'community', label: 'Community', type: 'text' },
+    { key: 'area', label: 'Area', type: 'text' },
     { key: 'address', label: 'Address', type: 'text', showInGrid: false },
     { key: 'makani', label: 'Makani', type: 'text', gridWidth: 130 },
     { key: 'plot_number', label: 'Plot number', type: 'text', showInGrid: false },
     { key: 'floors', label: 'Floors', type: 'number', gridWidth: 100 },
-    { key: 'year_built', label: 'Year built', type: 'number', gridWidth: 110 },
+    { key: 'year_built', label: 'Year built', type: 'select', options: yearOptions(), gridWidth: 110 },
 
     // ---- Restrictions (doc §1.3 "Restrictions"): a gate above the landlord's permission ----
     {
@@ -39,9 +51,13 @@ export const BUILDINGS_CONFIG: EntityPageConfig = {
       ],
       gridWidth: 150,
     },
-    { key: 'short_term_conditions', label: 'Conditions (if conditional)', type: 'textarea', showInGrid: false },
-    { key: 'guest_limit', label: 'Guest limit', type: 'number', showInGrid: false },
-    { key: 'minimum_stay_nights', label: 'Minimum stay (nights)', type: 'number', showInGrid: false },
+    {
+      key: 'short_term_conditions',
+      label: 'Conditions (if conditional)',
+      type: 'textarea',
+      showInGrid: false,
+      visibleWhen: { field: 'short_term_permitted', equals: 'conditional' },
+    },
     { key: 'party_noise_rules', label: 'Party / noise rules', type: 'textarea', showInGrid: false },
     { key: 'pet_rules', label: 'Pet rules', type: 'textarea', showInGrid: false },
 

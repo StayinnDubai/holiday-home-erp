@@ -6,3 +6,4 @@ from app.models import foundation  # noqa: F401
 from app.models import accounting  # noqa: F401
 from app.models import master_data  # noqa: F401
 from app.models import leasing  # noqa: F401
+from app.models import inventory  # noqa: F401

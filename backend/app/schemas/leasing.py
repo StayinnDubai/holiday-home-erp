@@ -10,15 +10,25 @@ class TenancyContractBase(BaseModel):
     landlord_ids: list[uuid.UUID] = Field(default_factory=list)
     contract_type: str = "new"  # new | renewal
     renewal_of_id: uuid.UUID | None = None
+    contract_date: date | None = None
     start_date: date
     end_date: date
     total_annual_rent: float
     instalment_count: int = 1
     payment_method: str = "cheque"  # cheque | transfer
+    grace_period_start_date: date | None = None
+    grace_period_end_date: date | None = None
     security_deposit_amount: float | None = None
+    agency_name: str | None = None
     agency_fee_amount: float | None = None
     agency_fee_vat_applicable: bool = True
+    agency_renewal_charge_amount: float | None = None
+    landlord_maintenance_threshold: float | None = None
     notice_period_days: int | None = None
+    vacating_notice_period_days: int | None = None
+    renewal_notice_period_days: int | None = None
+    early_termination_notice_days: int | None = None
+    early_termination_penalty_amount: float | None = None
     sublease_permitted: str = "no"  # yes | no
     holiday_home_permitted: str = "no"  # yes | no
     status: str = "draft"  # draft | active | expired | terminated | superseded
@@ -33,15 +43,25 @@ class TenancyContractUpdate(BaseModel):
     landlord_ids: list[uuid.UUID] | None = None
     contract_type: str | None = None
     renewal_of_id: uuid.UUID | None = None
+    contract_date: date | None = None
     start_date: date | None = None
     end_date: date | None = None
     total_annual_rent: float | None = None
     instalment_count: int | None = None
     payment_method: str | None = None
+    grace_period_start_date: date | None = None
+    grace_period_end_date: date | None = None
     security_deposit_amount: float | None = None
+    agency_name: str | None = None
     agency_fee_amount: float | None = None
     agency_fee_vat_applicable: bool | None = None
+    agency_renewal_charge_amount: float | None = None
+    landlord_maintenance_threshold: float | None = None
     notice_period_days: int | None = None
+    vacating_notice_period_days: int | None = None
+    renewal_notice_period_days: int | None = None
+    early_termination_notice_days: int | None = None
+    early_termination_penalty_amount: float | None = None
     sublease_permitted: str | None = None
     holiday_home_permitted: str | None = None
     status: str | None = None
@@ -64,15 +84,25 @@ class TenancyContractOut(BaseModel):
     # doc §1.4 "Gap detection": positive only if the new contract starts after the
     # predecessor's end date -- an uncovered period, surfaced, never auto-corrected.
     gap_days: int | None = None
+    contract_date: date | None = None
     start_date: date
     end_date: date
     total_annual_rent: float
     instalment_count: int
     payment_method: str
+    grace_period_start_date: date | None = None
+    grace_period_end_date: date | None = None
     security_deposit_amount: float | None = None
+    agency_name: str | None = None
     agency_fee_amount: float | None = None
     agency_fee_vat_applicable: bool
+    agency_renewal_charge_amount: float | None = None
+    landlord_maintenance_threshold: float | None = None
     notice_period_days: int | None = None
+    vacating_notice_period_days: int | None = None
+    renewal_notice_period_days: int | None = None
+    early_termination_notice_days: int | None = None
+    early_termination_penalty_amount: float | None = None
     sublease_permitted: str
     holiday_home_permitted: str
     status: str

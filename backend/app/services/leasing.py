@@ -37,10 +37,14 @@ def _sort_col(model, sort_by: str | None, default):
 # ---------------------------------------------------------------------------
 class TenancyContractService:
     @staticmethod
-    def list_page(db: Session, params: PaginationParams) -> tuple[list[TenancyContract], int]:
+    def list_page(
+        db: Session, params: PaginationParams, unit_id: uuid.UUID | None = None
+    ) -> tuple[list[TenancyContract], int]:
         stmt = select(TenancyContract).where(TenancyContract.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(TenancyContract.contract_number.ilike(f"%{params.q}%"))
+        if unit_id is not None:
+            stmt = stmt.where(TenancyContract.unit_id == unit_id)
         col = _sort_col(TenancyContract, params.sort_by, TenancyContract.contract_number)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
         rows, total = paginate(db, stmt, params)
@@ -249,10 +253,18 @@ class TenancyContractService:
 # ---------------------------------------------------------------------------
 class EjariRegistrationService:
     @staticmethod
-    def list_page(db: Session, params: PaginationParams) -> tuple[list[EjariRegistration], int]:
+    def list_page(
+        db: Session, params: PaginationParams, unit_id: uuid.UUID | None = None
+    ) -> tuple[list[EjariRegistration], int]:
         stmt = select(EjariRegistration).where(EjariRegistration.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(EjariRegistration.ejari_contract_number.ilike(f"%{params.q}%"))
+        if unit_id is not None:
+            # Ejari relates to a unit indirectly, via its contract (doc §1.4: one
+            # contract per unit) -- join rather than a denormalized unit_id column.
+            stmt = stmt.join(TenancyContract, TenancyContract.id == EjariRegistration.contract_id).where(
+                TenancyContract.unit_id == unit_id
+            )
         col = _sort_col(EjariRegistration, params.sort_by, EjariRegistration.registration_date)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
         rows, total = paginate(db, stmt, params)

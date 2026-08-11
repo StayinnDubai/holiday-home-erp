@@ -13,8 +13,12 @@ router = APIRouter(prefix="/tenancy-contracts", tags=["tenancy-contracts"])
 
 
 @router.get("", response_model=ListResponse[TenancyContractOut])
-def list_tenancy_contracts(db: Session = Depends(get_db), params: PaginationParams = Depends(pagination_params)):
-    rows, total = TenancyContractService.list_page(db, params)
+def list_tenancy_contracts(
+    unit_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    params: PaginationParams = Depends(pagination_params),
+):
+    rows, total = TenancyContractService.list_page(db, params, unit_id=unit_id)
     return ListResponse(data=rows, meta=ListMeta(page=params.page, page_size=params.page_size, total=total))
 
 

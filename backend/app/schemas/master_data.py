@@ -11,6 +11,7 @@ class BuildingBase(BaseModel):
     name: str
     developer: str | None = None
     community: str | None = None
+    area: str | None = None
     address: str | None = None
     makani: str | None = None
     plot_number: str | None = None
@@ -19,8 +20,6 @@ class BuildingBase(BaseModel):
 
     short_term_permitted: str = "yes"  # yes | no | conditional
     short_term_conditions: str | None = None
-    guest_limit: int | None = None
-    minimum_stay_nights: int | None = None
     party_noise_rules: str | None = None
     pet_rules: str | None = None
 
@@ -59,6 +58,7 @@ class BuildingUpdate(BaseModel):
     name: str | None = None
     developer: str | None = None
     community: str | None = None
+    area: str | None = None
     address: str | None = None
     makani: str | None = None
     plot_number: str | None = None
@@ -67,8 +67,6 @@ class BuildingUpdate(BaseModel):
 
     short_term_permitted: str | None = None
     short_term_conditions: str | None = None
-    guest_limit: int | None = None
-    minimum_stay_nights: int | None = None
     party_noise_rules: str | None = None
     pet_rules: str | None = None
 
@@ -210,6 +208,31 @@ class BuildingDepositOut(BuildingDepositBase):
     building_name: str | None = None
 
 
+# ---------- Counterparty group (Accounting > Counterparty Group) ----------
+class CounterpartyGroupBase(BaseModel):
+    code: str
+    name: str
+    notes: str | None = None
+    active: bool = True
+
+
+class CounterpartyGroupCreate(CounterpartyGroupBase):
+    pass
+
+
+class CounterpartyGroupUpdate(BaseModel):
+    code: str | None = None
+    name: str | None = None
+    notes: str | None = None
+    active: bool | None = None
+
+
+class CounterpartyGroupOut(CounterpartyGroupBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    counterparty_count: int = 0
+
+
 # ---------- Counterparty ----------
 class CounterpartyBase(BaseModel):
     code: str | None = None
@@ -219,6 +242,7 @@ class CounterpartyBase(BaseModel):
     trn: str | None = None
     emirates_id: str | None = None
     hold_flag: bool = False
+    group_id: uuid.UUID | None = None
 
 
 class CounterpartyCreate(CounterpartyBase):
@@ -233,12 +257,14 @@ class CounterpartyUpdate(BaseModel):
     trn: str | None = None
     emirates_id: str | None = None
     hold_flag: bool | None = None
+    group_id: uuid.UUID | None = None
 
 
 class CounterpartyOut(CounterpartyBase):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     unit_count: int = 0
+    group_name: str | None = None
 
 
 # ---------- Unit ----------
@@ -247,9 +273,19 @@ class UnitBase(BaseModel):
     building_id: uuid.UUID
     landlord_ids: list[uuid.UUID] = Field(default_factory=list)
     type: str | None = None
+    property_type: str | None = None
+    floor_number: str | None = None
+    apartment_number: str | None = None
+    parking_number: str | None = None
     bathrooms: int | None = None
     max_occupancy: int | None = None
-    area_sqft: float | None = None
+    area_sqm: float | None = None
+    suite_area_sqm: float | None = None
+    has_balcony: bool = False
+    balcony_area_sqm: float | None = None
+    furnished_status: str | None = None  # furnished | unfurnished
+    title_deed_number: str | None = None
+    dewa_premises_number: str | None = None
     status: str = "active"
     handover_date: date | None = None
     first_live_date: date | None = None
@@ -264,9 +300,19 @@ class UnitUpdate(BaseModel):
     building_id: uuid.UUID | None = None
     landlord_ids: list[uuid.UUID] | None = None
     type: str | None = None
+    property_type: str | None = None
+    floor_number: str | None = None
+    apartment_number: str | None = None
+    parking_number: str | None = None
     bathrooms: int | None = None
     max_occupancy: int | None = None
-    area_sqft: float | None = None
+    area_sqm: float | None = None
+    suite_area_sqm: float | None = None
+    has_balcony: bool | None = None
+    balcony_area_sqm: float | None = None
+    furnished_status: str | None = None
+    title_deed_number: str | None = None
+    dewa_premises_number: str | None = None
     status: str | None = None
     handover_date: date | None = None
     first_live_date: date | None = None
@@ -282,9 +328,43 @@ class UnitOut(BaseModel):
     landlord_ids: list[uuid.UUID] = Field(default_factory=list)
     landlord_names: str | None = None
     type: str | None = None
+    property_type: str | None = None
+    floor_number: str | None = None
+    apartment_number: str | None = None
+    parking_number: str | None = None
     bathrooms: int | None = None
     max_occupancy: int | None = None
-    area_sqft: float | None = None
+    area_sqm: float | None = None
+    suite_area_sqm: float | None = None
+    has_balcony: bool = False
+    balcony_area_sqm: float | None = None
+    furnished_status: str | None = None
+    title_deed_number: str | None = None
+    dewa_premises_number: str | None = None
     status: str
     handover_date: date | None = None
     first_live_date: date | None = None
+
+
+# ---------- Unit spaces (layout components) ----------
+class UnitSpaceBase(BaseModel):
+    unit_id: uuid.UUID
+    space_type: str  # bedroom | bathroom | living_room | kitchen | laundry_area | balcony | storage | dining_room | office | other
+    name: str | None = None
+    notes: str | None = None
+
+
+class UnitSpaceCreate(UnitSpaceBase):
+    pass
+
+
+class UnitSpaceUpdate(BaseModel):
+    unit_id: uuid.UUID | None = None
+    space_type: str | None = None
+    name: str | None = None
+    notes: str | None = None
+
+
+class UnitSpaceOut(UnitSpaceBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
