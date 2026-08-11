@@ -3,7 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
-from app.routers import attachments, audit_log, buildings, comments, counterparties, reference_lists, settings_, units
+from app.routers import (
+    attachments,
+    audit_log,
+    buildings,
+    comments,
+    counterparties,
+    ejari_registrations,
+    reference_lists,
+    settings_,
+    tenancy_contracts,
+    units,
+)
 
 app = FastAPI(
     title="Holiday Home ERP API",
@@ -33,6 +44,8 @@ app.include_router(audit_log.router, prefix=API_PREFIX)
 app.include_router(buildings.router, prefix=API_PREFIX)
 app.include_router(counterparties.router, prefix=API_PREFIX)
 app.include_router(units.router, prefix=API_PREFIX)
+app.include_router(tenancy_contracts.router, prefix=API_PREFIX)
+app.include_router(ejari_registrations.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

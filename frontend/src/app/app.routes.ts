@@ -5,7 +5,7 @@ import { PlaceholderComponent } from './shared/placeholder/placeholder.component
 import { UNITS_CONFIG } from './features/units/units.config';
 import { BUILDINGS_CONFIG } from './features/buildings/buildings.config';
 import { COUNTERPARTIES_CONFIG } from './features/counterparties/counterparties.config';
-import { TENANCY_CONTRACTS_CONFIG, RENTAL_AGREEMENTS_CONFIG } from './features/contracts/contracts.config';
+import { TENANCY_CONTRACTS_CONFIG, EJARI_REGISTRATIONS_CONFIG, RENTAL_AGREEMENTS_CONFIG } from './features/contracts/contracts.config';
 import { DTCM_PERMITS_CONFIG, MOVE_IN_PERMITS_CONFIG } from './features/permits/permits.config';
 import { CONVERSIONS_CONFIG } from './features/conversions/conversions.config';
 import { RESERVATIONS_CONFIG, GUESTS_CONFIG } from './features/reservations/reservations.config';
@@ -61,6 +61,7 @@ export const routes: Routes = [
       { path: 'buildings', loadComponent: loadEntityPage, data: { title: 'Buildings', config: BUILDINGS_CONFIG } },
       { path: 'counterparties', loadComponent: loadEntityPage, data: { title: 'Landlords & Counterparties', config: COUNTERPARTIES_CONFIG } },
       { path: 'contracts/tenancy', loadComponent: loadEntityPage, data: { title: 'Tenancy Contracts', config: TENANCY_CONTRACTS_CONFIG } },
+      { path: 'contracts/tenancy/ejari', loadComponent: loadEntityPage, data: { title: 'Ejari Registrations', config: EJARI_REGISTRATIONS_CONFIG } },
       { path: 'contracts/rental', loadComponent: loadEntityPage, data: { title: 'Rental Agreements', config: RENTAL_AGREEMENTS_CONFIG } },
       { path: 'permits/dtcm', loadComponent: loadEntityPage, data: { title: 'DTCM Permits', config: DTCM_PERMITS_CONFIG } },
       { path: 'permits/move-in', loadComponent: loadEntityPage, data: { title: 'Move-in Permits', config: MOVE_IN_PERMITS_CONFIG } },

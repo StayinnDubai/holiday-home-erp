@@ -128,6 +128,7 @@ export class AppLayoutComponent implements OnInit {
         { label: 'Buildings', routerLink: '/buildings' },
         { label: 'Landlords & Counterparties', routerLink: '/counterparties' },
         { label: 'Tenancy Contracts', routerLink: '/contracts/tenancy' },
+        { label: 'Ejari Registrations', routerLink: '/contracts/tenancy/ejari' },
         { label: 'Rental Agreements', routerLink: '/contracts/rental' },
         { label: 'DTCM Permits', routerLink: '/permits/dtcm' },
         { label: 'Move-in Permits', routerLink: '/permits/move-in' },
