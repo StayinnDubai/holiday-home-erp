@@ -7,8 +7,14 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { CompanyApiService, CompanyRecord } from '../../core/api/company-api.service';
+import { CrudApiService } from '../../core/api/crud-api.service';
 import { AttachmentsFieldComponent } from '../../shared/crud/attachments-field.component';
 import { AttachmentsListComponent } from '../../shared/crud/attachments-list.component';
+
+interface CurrencyOption {
+  id: string;
+  name: string;
+}
 
 const MONTHS = [
   { label: 'January', value: 1 },
@@ -138,8 +144,15 @@ const MONTHS = [
             />
           </div>
           <div class="field">
-            <label for="base_currency">Base currency</label>
-            <input id="base_currency" pInputText formControlName="base_currency" maxlength="3" />
+            <label for="base_currency_id">Base currency</label>
+            <p-select
+              inputId="base_currency_id"
+              formControlName="base_currency_id"
+              [options]="currencies"
+              optionLabel="name"
+              optionValue="id"
+              placeholder="Select..."
+            />
           </div>
           <div class="field">
             <label for="timezone">Timezone</label>
@@ -250,13 +263,18 @@ const MONTHS = [
 })
 export class CompanySettingsComponent implements OnInit {
   months = MONTHS;
+  currencies: CurrencyOption[] = [];
   company: CompanyRecord | null = null;
   form: FormGroup;
   saving = false;
   savedAt: Date | null = null;
   loadError: string | null = null;
 
-  constructor(private readonly fb: FormBuilder, private readonly api: CompanyApiService) {
+  constructor(
+    private readonly fb: FormBuilder,
+    private readonly api: CompanyApiService,
+    private readonly crudApi: CrudApiService
+  ) {
     this.form = this.fb.group({
       legal_name: ['', Validators.required],
       brand_name: [''],
@@ -270,12 +288,16 @@ export class CompanySettingsComponent implements OnInit {
       shareholders: [''],
       address: [''],
       financial_year_start_month: [1],
-      base_currency: ['AED'],
+      base_currency_id: [null as string | null],
       timezone: ['Asia/Dubai'],
     });
   }
 
   ngOnInit(): void {
+    this.crudApi.list<CurrencyOption>('currencies', { page: 1, page_size: 200 }).subscribe({
+      next: (res) => (this.currencies = res.data),
+    });
+
     this.api.get().subscribe({
       next: (res) => {
         this.company = res.data;

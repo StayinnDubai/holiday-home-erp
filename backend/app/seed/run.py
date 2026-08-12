@@ -9,8 +9,15 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.models.accounting import Account
-from app.models.foundation import Entity, ReferenceListItem
+from app.models.foundation import Currency, Entity, ReferenceListItem
 from app.seed.chart_of_accounts import ACCOUNTS, CONTROL_ACCOUNT_CODES
+
+# Settings > Currencies -- multi-currency support (v1: manually maintained list).
+CURRENCIES = [
+    ("001", "AED", "UAE Dirham"),
+    ("002", "USD", "US Dollar"),
+    ("003", "AMD", "Armenian Dram"),
+]
 
 # doc §1.1: confirmed block-type availability -- owner stay, renovation, staff use,
 # contract gap, deep clean are unavailable (excluded from adjusted occupancy);
@@ -28,10 +35,23 @@ BLOCK_TYPES = [
 ]
 
 
+def seed_currencies(db) -> None:
+    existing_codes = set(db.execute(select(Currency.code)).scalars().all())
+    created = 0
+    for code, name, full_name in CURRENCIES:
+        if code in existing_codes:
+            continue
+        db.add(Currency(code=code, name=name, full_name=full_name))
+        created += 1
+    db.flush()
+    print(f"Seeded {created} new currencies ({len(CURRENCIES) - created} already present).")
+
+
 def seed_entity(db) -> Entity:
     entity = db.execute(select(Entity)).scalars().first()
     if entity is None:
-        entity = Entity(legal_name="Holiday Home ERP Co.", base_currency="AED", timezone="Asia/Dubai")
+        aed_id = db.execute(select(Currency.id).where(Currency.name == "AED")).scalars().first()
+        entity = Entity(legal_name="Holiday Home ERP Co.", base_currency_id=aed_id, timezone="Asia/Dubai")
         db.add(entity)
         db.flush()
         print("Created Entity row.")
@@ -81,6 +101,7 @@ def seed_block_types(db) -> None:
 def run() -> None:
     db = SessionLocal()
     try:
+        seed_currencies(db)
         seed_entity(db)
         seed_accounts(db)
         seed_block_types(db)

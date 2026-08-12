@@ -214,6 +214,7 @@ class CounterpartyGroupBase(BaseModel):
     name: str
     notes: str | None = None
     active: bool = True
+    is_landlord_group: bool = False
 
 
 class CounterpartyGroupCreate(CounterpartyGroupBase):
@@ -225,6 +226,7 @@ class CounterpartyGroupUpdate(BaseModel):
     name: str | None = None
     notes: str | None = None
     active: bool | None = None
+    is_landlord_group: bool | None = None
 
 
 class CounterpartyGroupOut(CounterpartyGroupBase):

@@ -31,7 +31,11 @@ class InventoryItemService:
         stmt = select(InventoryItem).where(InventoryItem.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(InventoryItem.name.ilike(f"%{params.q}%") | InventoryItem.code.ilike(f"%{params.q}%"))
-        col = _sort_col(InventoryItem, params.sort_by, InventoryItem.code)
+        if params.sort_by == "default_supplier_name":
+            stmt = stmt.outerjoin(Counterparty, Counterparty.id == InventoryItem.default_supplier_id)
+            col = Counterparty.name
+        else:
+            col = _sort_col(InventoryItem, params.sort_by, InventoryItem.code)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
         rows, total = paginate(db, stmt, params)
         InventoryItemService._attach_computed(db, rows)
@@ -174,7 +178,14 @@ class InventoryMovementService:
             stmt = stmt.where(InventoryMovement.item_id == item_id)
         if params.q:
             stmt = stmt.where(InventoryMovement.reference.ilike(f"%{params.q}%"))
-        col = _sort_col(InventoryMovement, params.sort_by, InventoryMovement.date)
+        if params.sort_by in ("item_code", "item_name"):
+            stmt = stmt.join(InventoryItem, InventoryItem.id == InventoryMovement.item_id)
+            col = InventoryItem.code if params.sort_by == "item_code" else InventoryItem.name
+        elif params.sort_by == "supplier_name":
+            stmt = stmt.outerjoin(Counterparty, Counterparty.id == InventoryMovement.supplier_id)
+            col = Counterparty.name
+        else:
+            col = _sort_col(InventoryMovement, params.sort_by, InventoryMovement.date)
         stmt = stmt.order_by(col.desc() if params.sort_dir != "asc" else col.asc())
         rows, total = paginate(db, stmt, params)
         InventoryMovementService._attach_relations(db, rows)

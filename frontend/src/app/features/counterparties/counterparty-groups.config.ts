@@ -16,5 +16,11 @@ export const COUNTERPARTY_GROUPS_CONFIG: EntityPageConfig = {
     { key: 'counterparty_count', label: 'Counterparties', type: 'number', showInForm: false, gridWidth: 140 },
     { key: 'notes', label: 'Notes', type: 'textarea', showInGrid: false },
     { key: 'active', label: 'Active', type: 'boolean', gridWidth: 100 },
+    {
+      key: 'is_landlord_group',
+      label: 'Landlord group',
+      type: 'boolean',
+      gridWidth: 130,
+    },
   ],
 };

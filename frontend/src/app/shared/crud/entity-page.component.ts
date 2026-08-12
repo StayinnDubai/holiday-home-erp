@@ -80,6 +80,10 @@ type Row = Record<string, unknown> & { id: string };
         border: 1px solid #e2e8f0;
         border-radius: 12px;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 6.5rem);
+        min-height: 420px;
       }
       .panel__header {
         display: flex;
@@ -88,6 +92,7 @@ type Row = Record<string, unknown> & { id: string };
         gap: 1rem;
         padding: 1.25rem 1.5rem;
         border-bottom: 1px solid #e2e8f0;
+        flex-shrink: 0;
       }
       .panel__title {
         margin: 0 0 0.25rem;
@@ -101,7 +106,8 @@ type Row = Record<string, unknown> & { id: string };
         font-size: 0.88rem;
       }
       .panel__grid {
-        height: 560px;
+        flex: 1;
+        min-height: 0;
         padding: 1rem;
       }
     `,
@@ -132,8 +138,13 @@ export class EntityPageComponent implements OnInit {
         (f): ColDef => ({
           field: f.key,
           headerName: f.label,
-          width: f.gridWidth,
-          flex: f.gridWidth ? undefined : 1,
+          // `gridWidth` is a minimum, not a cap -- columns still flex to fill any
+          // extra space, but never shrink below it and truncate their header/content
+          // (a fixed `width` with several flex-only siblings was squeezing those down
+          // to near-zero). Falls back to a size that fits most labels/values.
+          minWidth: f.gridWidth ?? 140,
+          flex: 1,
+          sortable: f.sortable !== false,
           valueFormatter: f.gridValueFormatter ? (p) => f.gridValueFormatter!(p.value) : undefined,
         })
       ),

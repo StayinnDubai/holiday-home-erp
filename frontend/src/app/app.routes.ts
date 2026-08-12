@@ -6,6 +6,7 @@ import { UNITS_CONFIG } from './features/units/units.config';
 import { BUILDINGS_CONFIG, BUILDING_CONTACTS_CONFIG, BUILDING_AMENITIES_CONFIG, BUILDING_DEPOSITS_CONFIG } from './features/buildings/buildings.config';
 import { COUNTERPARTIES_CONFIG } from './features/counterparties/counterparties.config';
 import { COUNTERPARTY_GROUPS_CONFIG } from './features/counterparties/counterparty-groups.config';
+import { LANDLORDS_CONFIG } from './features/counterparties/landlords.config';
 import { INVENTORY_ITEMS_CONFIG, INVENTORY_MOVEMENTS_CONFIG } from './features/inventory/inventory.config';
 import { TENANCY_CONTRACTS_CONFIG, EJARI_REGISTRATIONS_CONFIG, RENTAL_AGREEMENTS_CONFIG } from './features/contracts/contracts.config';
 import { DTCM_PERMITS_CONFIG, MOVE_IN_PERMITS_CONFIG } from './features/permits/permits.config';
@@ -19,7 +20,7 @@ import {
   CHEQUE_LEDGER_CONFIG,
   CASH_LEDGER_CONFIG,
   INVOICES_CONFIG,
-  BANK_STATEMENT_CONFIG,
+  BANK_ACCOUNTS_CONFIG,
 } from './features/accounting/accounting.config';
 import {
   NUMBERING_CONFIG,
@@ -28,6 +29,8 @@ import {
   COST_TYPES_CONFIG,
   ASSET_CATEGORIES_CONFIG,
   REFERENCE_LISTS_CONFIG,
+  CURRENCIES_CONFIG,
+  BANK_ACCOUNT_COLUMNS_CONFIG,
 } from './features/settings/settings.config';
 
 /**
@@ -66,7 +69,7 @@ export const routes: Routes = [
       { path: 'buildings/contacts', loadComponent: loadEntityPage, data: { title: 'Building Contacts', config: BUILDING_CONTACTS_CONFIG } },
       { path: 'buildings/amenities', loadComponent: loadEntityPage, data: { title: 'Building Amenities', config: BUILDING_AMENITIES_CONFIG } },
       { path: 'buildings/deposits', loadComponent: loadEntityPage, data: { title: 'Building Deposits & Fees', config: BUILDING_DEPOSITS_CONFIG } },
-      { path: 'counterparties', loadComponent: loadEntityPage, data: { title: 'Landlords & Counterparties', config: COUNTERPARTIES_CONFIG } },
+      { path: 'landlords', loadComponent: loadEntityPage, data: { title: 'Landlords', config: LANDLORDS_CONFIG } },
       { path: 'contracts/tenancy', loadComponent: loadEntityPage, data: { title: 'Tenancy Contracts', config: TENANCY_CONTRACTS_CONFIG } },
       { path: 'contracts/tenancy/ejari', loadComponent: loadEntityPage, data: { title: 'Ejari Registrations', config: EJARI_REGISTRATIONS_CONFIG } },
       { path: 'contracts/rental', loadComponent: loadEntityPage, data: { title: 'Rental Agreements', config: RENTAL_AGREEMENTS_CONFIG } },
@@ -92,9 +95,22 @@ export const routes: Routes = [
       { path: 'accounting/journal-entries', loadComponent: loadEntityPage, data: { title: 'Journal Entries', config: JOURNAL_ENTRIES_CONFIG } },
       { path: 'accounting/trial-balance', loadComponent: () => PlaceholderComponent, data: { title: 'Trial Balance', note: 'Read-only report, not a CRUD entity -- built with Reporting (plan §9 milestone 6).' } },
       { path: 'accounting/cheque-ledger', loadComponent: loadEntityPage, data: { title: 'Cheque Ledger', config: CHEQUE_LEDGER_CONFIG } },
+      { path: 'accounting/bank-accounts', loadComponent: loadEntityPage, data: { title: 'Bank Accounts', config: BANK_ACCOUNTS_CONFIG } },
       { path: 'accounting/cash-ledger', loadComponent: loadEntityPage, data: { title: 'Cash Ledger', config: CASH_LEDGER_CONFIG } },
       { path: 'accounting/invoices', loadComponent: loadEntityPage, data: { title: 'Invoices', config: INVOICES_CONFIG } },
-      { path: 'accounting/bank-statement', loadComponent: loadEntityPage, data: { title: 'Bank Statement', config: BANK_STATEMENT_CONFIG } },
+      {
+        path: 'accounting/bank-statement',
+        loadComponent: () =>
+          import('./features/accounting/bank-statement-original.component').then((m) => m.BankStatementOriginalComponent),
+        data: { title: 'Bank Statement - Original' },
+      },
+      {
+        path: 'accounting/bank-statement-reconciliation',
+        loadComponent: () =>
+          import('./features/accounting/bank-statement-reconciliation.component').then((m) => m.BankStatementReconciliationComponent),
+        data: { title: 'Bank Statement - Reconciliation' },
+      },
+      { path: 'accounting/counterparties', loadComponent: loadEntityPage, data: { title: 'Counterparties', config: COUNTERPARTIES_CONFIG } },
       { path: 'accounting/counterparty-groups', loadComponent: loadEntityPage, data: { title: 'Counterparty Group', config: COUNTERPARTY_GROUPS_CONFIG } },
       { path: 'accounting/inventory-items', loadComponent: loadEntityPage, data: { title: 'Inventory Items', config: INVENTORY_ITEMS_CONFIG } },
       { path: 'accounting/inventory-movements', loadComponent: loadEntityPage, data: { title: 'Inventory Movements', config: INVENTORY_MOVEMENTS_CONFIG } },
@@ -113,6 +129,8 @@ export const routes: Routes = [
         loadComponent: () => import('./features/settings/company-settings.component').then((m) => m.CompanySettingsComponent),
         data: { title: 'Company' },
       },
+      { path: 'settings/currencies', loadComponent: loadEntityPage, data: { title: 'Currencies', config: CURRENCIES_CONFIG } },
+      { path: 'settings/bank-account-columns', loadComponent: loadEntityPage, data: { title: 'Bank Account Columns', config: BANK_ACCOUNT_COLUMNS_CONFIG } },
       { path: 'settings/numbering', loadComponent: loadEntityPage, data: { title: 'Numbering', config: NUMBERING_CONFIG } },
       { path: 'settings/tax-codes', loadComponent: loadEntityPage, data: { title: 'Tax Codes', config: TAX_CODES_CONFIG } },
       { path: 'settings/setup-cost-types', loadComponent: loadEntityPage, data: { title: 'Setup Cost Types', config: SETUP_COST_TYPES_CONFIG } },

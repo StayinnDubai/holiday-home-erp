@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
@@ -53,8 +53,16 @@ class BuildingService:
         stmt = select(Building).where(Building.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(Building.name.ilike(f"%{params.q}%"))
-        stmt = stmt.order_by(_sort_col(Building, params.sort_by, Building.name).asc() if params.sort_dir != "desc"
-                              else _sort_col(Building, params.sort_by, Building.name).desc())
+        if params.sort_by == "unit_count":
+            order_col = (
+                select(func.count(Unit.id))
+                .where(Unit.building_id == Building.id, Unit.is_deleted.is_(False))
+                .correlate(Building)
+                .scalar_subquery()
+            )
+        else:
+            order_col = _sort_col(Building, params.sort_by, Building.name)
+        stmt = stmt.order_by(order_col.asc() if params.sort_dir != "desc" else order_col.desc())
         rows, total = paginate(db, stmt, params)
         BuildingService._attach_unit_counts(db, rows)
         return rows, total
@@ -137,13 +145,23 @@ def _attach_building_names(db: Session, rows: list, building_id_attr: str = "bui
         r.building_name = names.get(getattr(r, building_id_attr))
 
 
+def _sort_col_with_building_name(stmt: Select, model, params: PaginationParams, default):
+    """`building_name` is a display column joined in at read time (`_attach_building_names`),
+    not a real column on `model` -- `_sort_col`'s `hasattr` check misses it, so a click on
+    that header silently no-ops. Join it in for real only when it's actually the sort key."""
+    if params.sort_by == "building_name":
+        stmt = stmt.outerjoin(Building, Building.id == model.building_id)
+        return stmt, Building.name
+    return stmt, _sort_col(model, params.sort_by, default)
+
+
 class BuildingContactService:
     @staticmethod
     def list_page(db: Session, params: PaginationParams) -> tuple[list[BuildingContact], int]:
         stmt = select(BuildingContact).where(BuildingContact.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(BuildingContact.name.ilike(f"%{params.q}%"))
-        col = _sort_col(BuildingContact, params.sort_by, BuildingContact.name)
+        stmt, col = _sort_col_with_building_name(stmt, BuildingContact, params, BuildingContact.name)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
         rows, total = paginate(db, stmt, params)
         _attach_building_names(db, rows)
@@ -201,7 +219,7 @@ class BuildingAmenityService:
         stmt = select(BuildingAmenity).where(BuildingAmenity.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(BuildingAmenity.name.ilike(f"%{params.q}%"))
-        col = _sort_col(BuildingAmenity, params.sort_by, BuildingAmenity.name)
+        stmt, col = _sort_col_with_building_name(stmt, BuildingAmenity, params, BuildingAmenity.name)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
         rows, total = paginate(db, stmt, params)
         _attach_building_names(db, rows)
@@ -259,7 +277,7 @@ class BuildingDepositService:
         stmt = select(BuildingDeposit).where(BuildingDeposit.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(BuildingDeposit.description.ilike(f"%{params.q}%"))
-        col = _sort_col(BuildingDeposit, params.sort_by, BuildingDeposit.date)
+        stmt, col = _sort_col_with_building_name(stmt, BuildingDeposit, params, BuildingDeposit.date)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
         rows, total = paginate(db, stmt, params)
         _attach_building_names(db, rows)
@@ -316,12 +334,31 @@ class BuildingDepositService:
 # ---------------------------------------------------------------------------
 class CounterpartyService:
     @staticmethod
-    def list_page(db: Session, params: PaginationParams) -> tuple[list[Counterparty], int]:
+    def list_page(db: Session, params: PaginationParams, landlord_only: bool = False) -> tuple[list[Counterparty], int]:
         stmt = select(Counterparty).where(Counterparty.is_deleted.is_(False))
+        group_joined = False
+        if landlord_only:
+            stmt = stmt.join(CounterpartyGroup, CounterpartyGroup.id == Counterparty.group_id).where(
+                CounterpartyGroup.is_landlord_group.is_(True)
+            )
+            group_joined = True
         if params.q:
             stmt = stmt.where(Counterparty.name.ilike(f"%{params.q}%"))
-        stmt = stmt.order_by(_sort_col(Counterparty, params.sort_by, Counterparty.name).asc() if params.sort_dir != "desc"
-                              else _sort_col(Counterparty, params.sort_by, Counterparty.name).desc())
+        if params.sort_by == "unit_count":
+            order_col = (
+                select(func.count(UnitLandlord.id))
+                .join(Unit, Unit.id == UnitLandlord.unit_id)
+                .where(UnitLandlord.landlord_id == Counterparty.id, Unit.is_deleted.is_(False))
+                .correlate(Counterparty)
+                .scalar_subquery()
+            )
+        elif params.sort_by == "group_name":
+            if not group_joined:
+                stmt = stmt.outerjoin(CounterpartyGroup, CounterpartyGroup.id == Counterparty.group_id)
+            order_col = CounterpartyGroup.name
+        else:
+            order_col = _sort_col(Counterparty, params.sort_by, Counterparty.name)
+        stmt = stmt.order_by(order_col.asc() if params.sort_dir != "desc" else order_col.desc())
         rows, total = paginate(db, stmt, params)
         CounterpartyService._attach_unit_counts(db, rows)
         return rows, total
@@ -415,8 +452,16 @@ class CounterpartyGroupService:
         stmt = select(CounterpartyGroup).where(CounterpartyGroup.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(CounterpartyGroup.name.ilike(f"%{params.q}%") | CounterpartyGroup.code.ilike(f"%{params.q}%"))
-        col = _sort_col(CounterpartyGroup, params.sort_by, CounterpartyGroup.code)
-        stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
+        if params.sort_by == "counterparty_count":
+            order_col = (
+                select(func.count(Counterparty.id))
+                .where(Counterparty.group_id == CounterpartyGroup.id, Counterparty.is_deleted.is_(False))
+                .correlate(CounterpartyGroup)
+                .scalar_subquery()
+            )
+        else:
+            order_col = _sort_col(CounterpartyGroup, params.sort_by, CounterpartyGroup.code)
+        stmt = stmt.order_by(order_col.asc() if params.sort_dir != "desc" else order_col.desc())
         rows, total = paginate(db, stmt, params)
         CounterpartyGroupService._attach_counterparty_counts(db, rows)
         return rows, total
@@ -502,8 +547,8 @@ class UnitService:
         stmt = select(Unit).where(Unit.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(Unit.unit_name.ilike(f"%{params.q}%") | Unit.unit_code.ilike(f"%{params.q}%"))
-        stmt = stmt.order_by(_sort_col(Unit, params.sort_by, Unit.unit_code).asc() if params.sort_dir != "desc"
-                              else _sort_col(Unit, params.sort_by, Unit.unit_code).desc())
+        stmt, order_col = _sort_col_with_building_name(stmt, Unit, params, Unit.unit_code)
+        stmt = stmt.order_by(order_col.asc() if params.sort_dir != "desc" else order_col.desc())
         rows, total = paginate(db, stmt, params)
         UnitService._attach_relations(db, rows)
         return rows, total

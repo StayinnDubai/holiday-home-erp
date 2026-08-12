@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------- Company (doc §7 "Company") -- singleton, GET/PATCH only ----------
@@ -20,7 +20,8 @@ class EntityOut(BaseModel):
     shareholders: str | None = None
     address: str | None = None
     financial_year_start_month: int
-    base_currency: str
+    base_currency_id: uuid.UUID
+    base_currency_name: str | None = None
     timezone: str
 
 
@@ -37,8 +38,30 @@ class EntityUpdate(BaseModel):
     shareholders: str | None = None
     address: str | None = None
     financial_year_start_month: int | None = None
-    base_currency: str | None = None
+    base_currency_id: uuid.UUID | None = None
     timezone: str | None = None
+
+
+# ---------- Currencies (Settings > Currencies) ----------
+class CurrencyBase(BaseModel):
+    code: str = Field(pattern=r"^\d{3}$")  # manually entered, exactly 3 digits, unique
+    name: str
+    full_name: str
+
+
+class CurrencyCreate(CurrencyBase):
+    pass
+
+
+class CurrencyUpdate(BaseModel):
+    code: str | None = Field(default=None, pattern=r"^\d{3}$")
+    name: str | None = None
+    full_name: str | None = None
+
+
+class CurrencyOut(CurrencyBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
 
 
 # ---------- Reference list items (doc §7.4) ----------

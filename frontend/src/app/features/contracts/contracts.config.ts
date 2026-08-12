@@ -44,7 +44,7 @@ export const TENANCY_CONTRACTS_CONFIG: EntityPageConfig = {
       relationCreateFields: COUNTERPARTIES_CONFIG.fields,
       showInGrid: false,
     },
-    { key: 'landlord_names', label: 'Landlords', type: 'text', showInForm: false, gridWidth: 200 },
+    { key: 'landlord_names', label: 'Landlords', type: 'text', showInForm: false, gridWidth: 200, sortable: false },
     {
       key: 'contract_type',
       label: 'Type',
@@ -187,6 +187,7 @@ export const EJARI_REGISTRATIONS_CONFIG: EntityPageConfig = {
       type: 'text',
       showInForm: false,
       gridWidth: 260,
+      sortable: false,
       gridValueFormatter: (v) => (Array.isArray(v) ? v.join('; ') : ''),
     },
 

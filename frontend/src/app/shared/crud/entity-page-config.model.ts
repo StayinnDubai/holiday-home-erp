@@ -76,6 +76,10 @@ export interface EntityFieldConfig {
   showInForm?: boolean;
   /** Grid-only formatter, e.g. for booleans or enums -- avoids raw `true`/`false`/codes. */
   gridValueFormatter?: (value: unknown) => string;
+  /** Defaults to true. Set false when the column has no well-defined server-side
+   * order (e.g. a comma-joined multi-value display column like "Landlords") -- keeps
+   * the grid from offering a sort arrow that silently does nothing. */
+  sortable?: boolean;
 }
 
 export interface EntityPageConfig {

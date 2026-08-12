@@ -19,7 +19,8 @@ export interface CompanyRecord {
   shareholders: string | null;
   address: string | null;
   financial_year_start_month: number;
-  base_currency: string;
+  base_currency_id: string;
+  base_currency_name: string | null;
   timezone: string;
 }
 

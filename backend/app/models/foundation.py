@@ -5,9 +5,9 @@ every other module. No app_user / auth tables here yet (deferred, plan §7).
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import DateTime, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import AuditableRecord, Base, IdMixin, TimestampMixin
 
@@ -43,8 +43,26 @@ class Entity(IdMixin, TimestampMixin, Base):
     shareholders: Mapped[str | None] = mapped_column(Text)
     address: Mapped[str | None] = mapped_column(Text)
     financial_year_start_month: Mapped[int] = mapped_column(default=1)  # doc §7: 1 Jan - 31 Dec
-    base_currency: Mapped[str] = mapped_column(String(3), default="AED")  # doc §5.6: AED only in v1
+    base_currency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("currency.id"))  # doc §5.6: AED only in v1
     timezone: Mapped[str] = mapped_column(String(50), default="Asia/Dubai")
+
+    base_currency: Mapped["Currency"] = relationship()
+
+
+class Currency(AuditableRecord, Base):
+    """Settings > Currencies -- multi-currency support. Manually-maintained list
+    referenced by every "currency" field across the app (bank accounts, bank
+    statement lines, the company's base currency) instead of a free-text 3-letter
+    code, so a currency is picked from a list rather than typed. `code` is a
+    manually-entered, unique 3-digit identifier (e.g. "001"); `name` is the
+    short/ISO-ish code shown everywhere else (e.g. "AED"); `full_name` is the
+    descriptive name (e.g. "UAE Dirham")."""
+
+    __tablename__ = "currency"
+
+    code: Mapped[str] = mapped_column(String(3), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(10))
+    full_name: Mapped[str] = mapped_column(String(100))
 
 
 class AuditLog(IdMixin, Base):

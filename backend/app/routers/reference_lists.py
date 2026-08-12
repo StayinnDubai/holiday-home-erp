@@ -21,7 +21,11 @@ def list_reference_items(
     stmt = select(ReferenceListItem).where(ReferenceListItem.is_deleted.is_(False))
     if list_name:
         stmt = stmt.where(ReferenceListItem.list_name == list_name)
-    stmt = stmt.order_by(ReferenceListItem.list_name, ReferenceListItem.sort_order)
+    if params.sort_by and hasattr(ReferenceListItem, params.sort_by):
+        col = getattr(ReferenceListItem, params.sort_by)
+        stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
+    else:
+        stmt = stmt.order_by(ReferenceListItem.list_name, ReferenceListItem.sort_order)
     rows, total = paginate(db, stmt, params)
     return ListResponse(data=rows, meta=ListMeta(page=params.page, page_size=params.page_size, total=total))
 

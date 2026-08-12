@@ -47,7 +47,7 @@ export const UNITS_CONFIG: EntityPageConfig = {
       relationCreateFields: COUNTERPARTIES_CONFIG.fields,
       showInGrid: false,
     },
-    { key: 'landlord_names', label: 'Landlords', type: 'text', showInForm: false, gridWidth: 200 },
+    { key: 'landlord_names', label: 'Landlords', type: 'text', showInForm: false, gridWidth: 200, sortable: false },
     {
       key: 'type',
       label: 'Type',

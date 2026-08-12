@@ -1,4 +1,4 @@
-import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { EntityFieldConfig, EntityPageConfig } from '../../shared/crud/entity-page-config.model';
 import { COUNTERPARTY_GROUPS_CONFIG } from './counterparty-groups.config';
 
 /** Single master for landlords/tenants/suppliers/agents/OTAs (plan §3.2 `counterparty`,
@@ -7,40 +7,42 @@ import { COUNTERPARTY_GROUPS_CONFIG } from './counterparty-groups.config';
  * generic form -- doc §8 flags them as the highest-value fraud target and manager-only
  * to change, which needs real permission checks (deferred, plan §7), not a generic field.
  *
- * `unit_count` is backend-computed (count of units this counterparty co-owns via the
- * `unit_landlord` join table) -- proves the reverse of "one-or-more landlords per unit":
- * a landlord holds one-or-more units. */
+ * Shared by two pages: General > Landlords (`landlords.config.ts`, filtered to
+ * counterparties in an "is landlord group" group, adds the `unit_count` column) and
+ * Accounting > Counterparties (this file, unfiltered, no unit column -- a counterparty
+ * need not be attached to any specific unit). */
+export const COUNTERPARTY_BASE_FIELDS: EntityFieldConfig[] = [
+  { key: 'code', label: 'Code', type: 'text', gridWidth: 110 },
+  { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 220 },
+  {
+    key: 'type',
+    label: 'Type',
+    type: 'select',
+    required: true,
+    options: [
+      { label: 'Individual', value: 'individual' },
+      { label: 'Company', value: 'company' },
+    ],
+  },
+  { key: 'roles', label: 'Roles (comma-separated)', type: 'text', gridWidth: 220 },
+  { key: 'trn', label: 'TRN', type: 'text' },
+  { key: 'emirates_id', label: 'Emirates ID', type: 'text' },
+  { key: 'hold_flag', label: 'On hold', type: 'boolean', gridWidth: 100 },
+  {
+    key: 'group_id',
+    label: 'Counterparty group',
+    type: 'relation-select',
+    relationResourcePath: 'counterparty-groups',
+    relationLabelKey: 'name',
+    relationCreateFields: COUNTERPARTY_GROUPS_CONFIG.fields,
+    showInGrid: false,
+  },
+  { key: 'group_name', label: 'Group', type: 'text', showInForm: false, gridWidth: 160 },
+];
+
 export const COUNTERPARTIES_CONFIG: EntityPageConfig = {
-  title: 'Landlords & Counterparties',
-  subtitle: 'Single master for landlord/tenant/supplier/agent/OTA (doc §2.6). "Units" is a live count of units this landlord co-owns.',
+  title: 'Counterparties',
+  subtitle: 'Single master for landlord/tenant/supplier/agent/OTA (doc §2.6). All counterparties, regardless of group.',
   resourcePath: 'counterparties',
-  fields: [
-    { key: 'code', label: 'Code', type: 'text', gridWidth: 110 },
-    { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 220 },
-    { key: 'unit_count', label: 'Units', type: 'number', showInForm: false, gridWidth: 90 },
-    {
-      key: 'type',
-      label: 'Type',
-      type: 'select',
-      required: true,
-      options: [
-        { label: 'Individual', value: 'individual' },
-        { label: 'Company', value: 'company' },
-      ],
-    },
-    { key: 'roles', label: 'Roles (comma-separated)', type: 'text', gridWidth: 220 },
-    { key: 'trn', label: 'TRN', type: 'text' },
-    { key: 'emirates_id', label: 'Emirates ID', type: 'text' },
-    { key: 'hold_flag', label: 'On hold', type: 'boolean', gridWidth: 100 },
-    {
-      key: 'group_id',
-      label: 'Counterparty group',
-      type: 'relation-select',
-      relationResourcePath: 'counterparty-groups',
-      relationLabelKey: 'name',
-      relationCreateFields: COUNTERPARTY_GROUPS_CONFIG.fields,
-      showInGrid: false,
-    },
-    { key: 'group_name', label: 'Group', type: 'text', showInForm: false, gridWidth: 160 },
-  ],
+  fields: COUNTERPARTY_BASE_FIELDS,
 };

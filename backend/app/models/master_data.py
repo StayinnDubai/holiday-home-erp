@@ -160,6 +160,9 @@ class CounterpartyGroup(AuditableRecord, Base):
     name: Mapped[str] = mapped_column(String(255))
     notes: Mapped[str | None] = mapped_column(Text)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Marks this group as identifying its members as landlords -- drives the
+    # General > Landlords view, which shows only counterparties in such a group.
+    is_landlord_group: Mapped[bool] = mapped_column(Boolean, default=False)
 
     members: Mapped[list["Counterparty"]] = relationship(back_populates="group")
 

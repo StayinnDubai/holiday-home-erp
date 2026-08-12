@@ -1,5 +1,6 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
 import { COUNTERPARTIES_CONFIG } from '../counterparties/counterparties.config';
+import { CURRENCIES_CONFIG } from '../settings/settings.config';
 
 /** Plan §3.5 `account` / doc §2.0, Appendix A. All 108 accounts are seeded in the
  * backend (app/seed/chart_of_accounts.py, transcribed verbatim from Appendix A);
@@ -171,6 +172,67 @@ export const CHEQUE_LEDGER_CONFIG: EntityPageConfig = {
   ],
 };
 
+/** Accounting > Bank Accounts -- the company's own bank accounts. Distinct from a
+ * `Counterparty` of role "Bank" (the signatory relationship) -- this is the account
+ * itself, one row per account held at that bank. `code` is a manually-entered,
+ * unique 3-digit identifier (no auto-numbering rule given, unlike e.g. unit_code). */
+export const BANK_ACCOUNTS_CONFIG: EntityPageConfig = {
+  title: 'Bank Accounts',
+  subtitle: "The company's own bank accounts. Unique code is entered manually (3 digits).",
+  resourcePath: 'bank-accounts',
+  fields: [
+    { key: 'code', label: 'Unique code', type: 'text', required: true, gridWidth: 110 },
+    {
+      key: 'bank_id',
+      label: 'Bank name',
+      type: 'relation-select',
+      required: true,
+      relationResourcePath: 'counterparties',
+      relationLabelKey: 'name',
+      relationCreateFields: COUNTERPARTIES_CONFIG.fields,
+      showInGrid: false,
+    },
+    { key: 'bank_name', label: 'Bank name', type: 'text', showInForm: false, gridWidth: 180 },
+    { key: 'account_name', label: 'Account name', type: 'text', required: true, gridWidth: 200 },
+    { key: 'account_type', label: 'Account type', type: 'text', gridWidth: 140 },
+    { key: 'account_iban', label: 'Account IBAN', type: 'text', gridWidth: 220 },
+    { key: 'account_number', label: 'Account number', type: 'text', gridWidth: 170 },
+    {
+      key: 'currency_id',
+      label: 'Account currency',
+      type: 'relation-select',
+      relationResourcePath: 'currencies',
+      relationLabelKey: 'name',
+      relationCreateFields: CURRENCIES_CONFIG.fields,
+      showInGrid: false,
+    },
+    { key: 'currency_name', label: 'Account currency', type: 'text', showInForm: false, gridWidth: 140 },
+    {
+      key: 'status',
+      label: 'Account status',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Active', value: 'active' },
+        { label: 'Closed', value: 'closed' },
+        { label: 'Freezed', value: 'freezed' },
+      ],
+      gridWidth: 130,
+    },
+    { key: 'open_date', label: 'Account open date', type: 'date', gridWidth: 150 },
+    { key: 'close_date', label: 'Account close date', type: 'date', gridWidth: 150 },
+    {
+      key: 'chart_account_id',
+      label: 'Chart of account code',
+      type: 'relation-select',
+      relationResourcePath: 'accounts',
+      relationLabelKey: 'code',
+      showInGrid: false,
+    },
+    { key: 'chart_account_code', label: 'Chart of account code', type: 'text', showInForm: false, gridWidth: 170 },
+  ],
+};
+
 /** Plan §3.5 `cash_transaction`. */
 export const CASH_LEDGER_CONFIG: EntityPageConfig = {
   title: 'Cash Ledger',
@@ -226,34 +288,3 @@ export const INVOICES_CONFIG: EntityPageConfig = {
   ],
 };
 
-/** Bank statement (doc §5.9: "CSV/Excel import ... for: ... bank statements" --
- * entered one line at a time here for now; the importer itself is a separate later
- * milestone). One row per transaction line as it appears on the statement -- account
- * identity columns (name/type/IBAN/number/card/currency) are repeated on every row
- * rather than normalized into a separate bank-account table, mirroring how a bank's
- * own CSV/Excel export is shaped.
- *
- * Feeds the cheque ledger's "Reconcile from bank statement" action (accounting.config.ts
- * CHEQUE_LEDGER_CONFIG) as data to match against once that becomes real matching
- * rather than a placeholder -- kept free of any matching logic itself for now. */
-export const BANK_STATEMENT_CONFIG: EntityPageConfig = {
-  title: 'Bank Statement',
-  subtitle: 'Bank statement lines, entered manually for now (doc §5.9) -- CSV/Excel import is a later milestone.',
-  resourcePath: 'bank-statement-lines',
-  fields: [
-    { key: 'account_name', label: 'Account name', type: 'text', required: true, gridWidth: 160 },
-    { key: 'account_type', label: 'Account type', type: 'text', gridWidth: 130 },
-    { key: 'account_iban', label: 'Account IBAN', type: 'text', showInGrid: false },
-    { key: 'account_number', label: 'Account number', type: 'text', showInGrid: false },
-    { key: 'card_number', label: 'Card number', type: 'text', showInGrid: false },
-    { key: 'account_currency', label: 'Account currency', type: 'text', gridWidth: 110 },
-    { key: 'transaction_type', label: 'Transaction type', type: 'text', gridWidth: 140 },
-    { key: 'date', label: 'Date', type: 'date', required: true, gridWidth: 120 },
-    { key: 'ref_number', label: 'Ref. number', type: 'text', gridWidth: 140 },
-    { key: 'description', label: 'Description', type: 'text', gridWidth: 220 },
-    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridWidth: 130 },
-    { key: 'balance', label: 'Balance (AED)', type: 'number', gridWidth: 130 },
-    { key: 'original_ref_number', label: 'Original ref. number', type: 'text', showInGrid: false },
-    { key: 'notes', label: 'Notes', type: 'textarea', showInGrid: false },
-  ],
-};

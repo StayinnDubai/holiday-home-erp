@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -13,8 +13,12 @@ router = APIRouter(prefix="/counterparties", tags=["counterparties"])
 
 
 @router.get("", response_model=ListResponse[CounterpartyOut])
-def list_counterparties(db: Session = Depends(get_db), params: PaginationParams = Depends(pagination_params)):
-    rows, total = CounterpartyService.list_page(db, params)
+def list_counterparties(
+    db: Session = Depends(get_db),
+    params: PaginationParams = Depends(pagination_params),
+    landlord_only: bool = Query(False),
+):
+    rows, total = CounterpartyService.list_page(db, params, landlord_only=landlord_only)
     return ListResponse(data=rows, meta=ListMeta(page=params.page, page_size=params.page_size, total=total))
 
 

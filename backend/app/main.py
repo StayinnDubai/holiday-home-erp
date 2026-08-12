@@ -7,7 +7,9 @@ from app.routers import (
     accounts,
     attachments,
     audit_log,
-    bank_statement,
+    bank_account_columns,
+    bank_accounts,
+    bank_statement_entries,
     building_amenities,
     building_contacts,
     building_deposits,
@@ -17,6 +19,7 @@ from app.routers import (
     company,
     counterparties,
     counterparty_groups,
+    currencies,
     ejari_registrations,
     inventory_items,
     inventory_movements,
@@ -63,8 +66,11 @@ app.include_router(unit_spaces.router, prefix=API_PREFIX)
 app.include_router(tenancy_contracts.router, prefix=API_PREFIX)
 app.include_router(ejari_registrations.router, prefix=API_PREFIX)
 app.include_router(cheques.router, prefix=API_PREFIX)
-app.include_router(bank_statement.router, prefix=API_PREFIX)
+app.include_router(bank_accounts.router, prefix=API_PREFIX)
+app.include_router(bank_account_columns.router, prefix=API_PREFIX)
+app.include_router(bank_statement_entries.router, prefix=API_PREFIX)
 app.include_router(company.router, prefix=API_PREFIX)
+app.include_router(currencies.router, prefix=API_PREFIX)
 app.include_router(accounts.router, prefix=API_PREFIX)
 app.include_router(inventory_items.router, prefix=API_PREFIX)
 app.include_router(inventory_movements.router, prefix=API_PREFIX)

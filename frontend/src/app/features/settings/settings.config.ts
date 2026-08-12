@@ -1,5 +1,76 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
 
+/** Settings > Currencies -- multi-currency support. Manually-maintained list picked
+ * from everywhere a "currency" field used to be free text (Bank Accounts, Bank
+ * Statement, Company's base currency). `code` is a manually-entered, unique 3-digit
+ * identifier; `name` is the short code shown everywhere else (e.g. "AED"). */
+export const CURRENCIES_CONFIG: EntityPageConfig = {
+  title: 'Currencies',
+  subtitle: 'Multi-currency support -- picked from here everywhere a currency field appears.',
+  resourcePath: 'currencies',
+  fields: [
+    { key: 'code', label: 'Unique code', type: 'text', required: true, gridWidth: 120 },
+    { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 140 },
+    { key: 'full_name', label: 'Full name', type: 'text', required: true, gridWidth: 240 },
+  ],
+};
+
+/** Settings > Bank Account Columns -- the designer behind BOTH Accounting > Bank
+ * Statement - Original and Bank Statement - Reconciliation. Each bank account
+ * defines its own fully custom column set per view (banks export statements in
+ * different shapes) -- add one row here per column that account's grid should
+ * show, tagged with which of the two views it belongs to. `key` is the machine
+ * name the value is stored under; `sort_order` controls left-to-right column order
+ * within that view.
+ *
+ * No `relationCreateFields` on `bank_account_id` -- pulling in Bank Accounts' own
+ * field list here would create a circular import (accounting.config.ts already
+ * imports Currencies from this file). Create the bank account first under
+ * Accounting > Bank Accounts, then configure its columns here. */
+export const BANK_ACCOUNT_COLUMNS_CONFIG: EntityPageConfig = {
+  title: 'Bank Account Columns',
+  subtitle: 'Custom columns per bank account -- picked up by both Bank Statement - Original and - Reconciliation.',
+  resourcePath: 'bank-account-columns',
+  fields: [
+    {
+      key: 'bank_account_id',
+      label: 'Bank account',
+      type: 'relation-select',
+      required: true,
+      relationResourcePath: 'bank-accounts',
+      relationLabelKey: 'account_name',
+      showInGrid: false,
+    },
+    { key: 'bank_account_label', label: 'Bank account', type: 'text', showInForm: false, gridWidth: 180 },
+    {
+      key: 'applies_to',
+      label: 'View',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Bank Statement - Original', value: 'original' },
+        { label: 'Bank Statement - Reconciliation', value: 'reconciliation' },
+      ],
+      gridWidth: 220,
+    },
+    { key: 'key', label: 'Column key', type: 'text', required: true, gridWidth: 160 },
+    { key: 'label', label: 'Column label', type: 'text', required: true, gridWidth: 180 },
+    {
+      key: 'data_type',
+      label: 'Data type',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Text', value: 'text' },
+        { label: 'Number', value: 'number' },
+        { label: 'Date', value: 'date' },
+      ],
+      gridWidth: 120,
+    },
+    { key: 'sort_order', label: 'Sort order', type: 'number', gridWidth: 120 },
+  ],
+};
+
 /** Plan §3.1 `document_sequence` (doc §5.4). */
 export const NUMBERING_CONFIG: EntityPageConfig = {
   title: 'Numbering',
