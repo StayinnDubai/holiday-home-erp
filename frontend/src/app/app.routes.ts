@@ -8,10 +8,12 @@ import { COUNTERPARTIES_CONFIG } from './features/counterparties/counterparties.
 import { COUNTERPARTY_GROUPS_CONFIG } from './features/counterparties/counterparty-groups.config';
 import { LANDLORDS_CONFIG } from './features/counterparties/landlords.config';
 import { INVENTORY_ITEMS_CONFIG, INVENTORY_MOVEMENTS_CONFIG } from './features/inventory/inventory.config';
-import { TENANCY_CONTRACTS_CONFIG, EJARI_REGISTRATIONS_CONFIG } from './features/contracts/contracts.config';
-import { CHART_OF_ACCOUNTS_CONFIG, CHEQUE_LEDGER_CONFIG, BANK_ACCOUNTS_CONFIG, JOURNAL_ENTRIES_CONFIG } from './features/accounting/accounting.config';
-import { REFERENCE_LISTS_CONFIG, CURRENCIES_CONFIG, BANK_ACCOUNT_COLUMNS_CONFIG } from './features/settings/settings.config';
+import { TENANCY_CONTRACTS_CONFIG, EJARI_REGISTRATIONS_CONFIG, TENANCY_CONTRACT_ADJUSTMENTS_CONFIG } from './features/contracts/contracts.config';
+import { CHART_OF_ACCOUNTS_CONFIG, CHEQUE_LEDGER_CONFIG, BANK_ACCOUNTS_CONFIG, JOURNAL_ENTRIES_CONFIG, CASH_LEDGER_CONFIG, INVOICES_CONFIG } from './features/accounting/accounting.config';
+import { REFERENCE_LISTS_CONFIG, CURRENCIES_CONFIG, BANK_ACCOUNT_COLUMNS_CONFIG, TAX_CODES_CONFIG, ASSET_CATEGORIES_CONFIG, COST_TYPES_CONFIG } from './features/settings/settings.config';
 import { BILLS_CONFIG } from './features/bills/bills.config';
+import { ONLINE_ACCOUNTS_CONFIG } from './features/online-accounts/online-accounts.config';
+import { DTCM_PERMITS_CONFIG } from './features/permits/permits.config';
 
 /**
  * Route tree mirrors the sidebar 1:1 (plan §5). Every CRUD-able module routes to the
@@ -52,10 +54,16 @@ export const routes: Routes = [
       { path: 'landlords', loadComponent: loadEntityPage, data: { title: 'Landlords', config: LANDLORDS_CONFIG } },
       { path: 'contracts/tenancy', loadComponent: loadEntityPage, data: { title: 'Tenancy Contracts', config: TENANCY_CONTRACTS_CONFIG } },
       { path: 'contracts/tenancy/ejari', loadComponent: loadEntityPage, data: { title: 'Ejari Registrations', config: EJARI_REGISTRATIONS_CONFIG } },
+      { path: 'contracts/tenancy/adjustments', loadComponent: loadEntityPage, data: { title: 'Discounts & Grace Periods', config: TENANCY_CONTRACT_ADJUSTMENTS_CONFIG } },
       { path: 'contracts/rental', loadComponent: () => PlaceholderComponent, data: { title: 'Rental Agreements', note: 'Not built yet -- the page is designed (see features/contracts/contracts.config.ts) but has no backend API yet.' } },
-      { path: 'permits/dtcm', loadComponent: () => PlaceholderComponent, data: { title: 'DTCM Permits', note: 'Not built yet -- the page is designed (see features/permits/permits.config.ts) but has no backend API yet.' } },
+      { path: 'permits/dtcm', loadComponent: loadEntityPage, data: { title: 'DTCM Permits', config: DTCM_PERMITS_CONFIG } },
       { path: 'permits/move-in', loadComponent: () => PlaceholderComponent, data: { title: 'Move-in Permits', note: 'Not built yet -- the page is designed (see features/permits/permits.config.ts) but has no backend API yet.' } },
       { path: 'conversions', loadComponent: () => PlaceholderComponent, data: { title: 'Product-Line Conversions', note: 'Not built yet -- the page is designed (see features/conversions/conversions.config.ts) but has no backend API yet.' } },
+      {
+        path: 'documents',
+        loadComponent: () => import('./features/documents/documents.component').then((m) => m.DocumentsComponent),
+        data: { title: 'All Documents' },
+      },
 
       // ---- Reservations ----
       { path: 'reservations', loadComponent: () => PlaceholderComponent, data: { title: 'Reservation List / Calendar', note: 'Not built yet -- the page is designed (see features/reservations/reservations.config.ts) but has no backend API yet.' } },
@@ -80,8 +88,8 @@ export const routes: Routes = [
       },
       { path: 'accounting/cheque-ledger', loadComponent: loadEntityPage, data: { title: 'Cheque Ledger', config: CHEQUE_LEDGER_CONFIG } },
       { path: 'accounting/bank-accounts', loadComponent: loadEntityPage, data: { title: 'Bank Accounts', config: BANK_ACCOUNTS_CONFIG } },
-      { path: 'accounting/cash-ledger', loadComponent: () => PlaceholderComponent, data: { title: 'Cash Ledger', note: 'Not built yet -- the page is designed (see features/accounting/accounting.config.ts) but has no backend API yet.' } },
-      { path: 'accounting/invoices', loadComponent: () => PlaceholderComponent, data: { title: 'Invoices', note: 'Not built yet -- the page is designed (see features/accounting/accounting.config.ts) but has no backend API yet.' } },
+      { path: 'accounting/cash-ledger', loadComponent: loadEntityPage, data: { title: 'Cash Ledger', config: CASH_LEDGER_CONFIG } },
+      { path: 'accounting/invoices', loadComponent: loadEntityPage, data: { title: 'Invoices', config: INVOICES_CONFIG } },
       {
         path: 'accounting/bank-statement',
         loadComponent: () =>
@@ -110,10 +118,22 @@ export const routes: Routes = [
         loadComponent: () => import('./features/reports/balance-sheet.component').then((m) => m.BalanceSheetComponent),
         data: { title: 'Balance Sheet' },
       },
-      { path: 'reports/aged-ar-ap', loadComponent: () => PlaceholderComponent, data: { title: 'Aged Receivables/Payables' } },
-      { path: 'reports/compliance-dashboard', loadComponent: () => PlaceholderComponent, data: { title: 'Compliance Dashboard' } },
+      {
+        path: 'reports/aged-ar-ap',
+        loadComponent: () => import('./features/reports/aged-payables.component').then((m) => m.AgedPayablesComponent),
+        data: { title: 'Aged Payables' },
+      },
+      {
+        path: 'reports/compliance-dashboard',
+        loadComponent: () => import('./features/warnings/warnings.component').then((m) => m.WarningsComponent),
+        data: { title: 'Warnings' },
+      },
       { path: 'reports/deposit-recovery', loadComponent: () => PlaceholderComponent, data: { title: 'Deposit Recovery' } },
-      { path: 'reports/cheque-position', loadComponent: () => PlaceholderComponent, data: { title: 'Cheque Position' } },
+      {
+        path: 'reports/cheque-position',
+        loadComponent: () => import('./features/reports/cheque-position.component').then((m) => m.ChequePositionComponent),
+        data: { title: 'Cheque Position' },
+      },
 
       // ---- Settings ----
       {
@@ -124,10 +144,11 @@ export const routes: Routes = [
       { path: 'settings/currencies', loadComponent: loadEntityPage, data: { title: 'Currencies', config: CURRENCIES_CONFIG } },
       { path: 'settings/bank-account-columns', loadComponent: loadEntityPage, data: { title: 'Bank Account Columns', config: BANK_ACCOUNT_COLUMNS_CONFIG } },
       { path: 'settings/numbering', loadComponent: () => PlaceholderComponent, data: { title: 'Numbering', note: 'Not built yet -- the page is designed (see features/settings/settings.config.ts) but has no backend API yet. Document numbering itself already works internally via backend/app/services/numbering.py; this page is for configuring its rules.' } },
-      { path: 'settings/tax-codes', loadComponent: () => PlaceholderComponent, data: { title: 'Tax Codes', note: 'Not built yet -- the page is designed (see features/settings/settings.config.ts) but has no backend API yet.' } },
+      { path: 'settings/tax-codes', loadComponent: loadEntityPage, data: { title: 'Tax Codes', config: TAX_CODES_CONFIG } },
       { path: 'settings/setup-cost-types', loadComponent: () => PlaceholderComponent, data: { title: 'Setup Cost Types', note: 'Not built yet -- the page is designed (see features/settings/settings.config.ts) but has no backend API yet.' } },
-      { path: 'settings/cost-types', loadComponent: () => PlaceholderComponent, data: { title: 'Cost Types', note: 'Not built yet -- the page is designed (see features/settings/settings.config.ts) but has no backend API yet.' } },
-      { path: 'settings/asset-categories', loadComponent: () => PlaceholderComponent, data: { title: 'Asset Categories', note: 'Not built yet -- the page is designed (see features/settings/settings.config.ts) but has no backend API yet.' } },
+      { path: 'settings/cost-types', loadComponent: loadEntityPage, data: { title: 'Cost Types', config: COST_TYPES_CONFIG } },
+      { path: 'settings/asset-categories', loadComponent: loadEntityPage, data: { title: 'Asset Categories', config: ASSET_CATEGORIES_CONFIG } },
+      { path: 'settings/online-accounts', loadComponent: loadEntityPage, data: { title: 'Online Accounts', config: ONLINE_ACCOUNTS_CONFIG } },
       { path: 'settings/reference-lists', loadComponent: loadEntityPage, data: { title: 'Reference Lists', config: REFERENCE_LISTS_CONFIG } },
 
       { path: '**', loadComponent: () => PlaceholderComponent, data: { title: 'Not found' } },

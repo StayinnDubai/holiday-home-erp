@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { CrudApiService } from '../../core/api/crud-api.service';
 import { ReportsApiService } from '../../core/api/reports-api.service';
+import { WarningsApiService } from '../../core/api/warnings-api.service';
 import { formatAmount } from '../../shared/utils/amount';
 import { toLocalDateString } from '../../shared/utils/date';
 
@@ -106,6 +107,13 @@ function dateLessThanFilter(cutoff: string): Record<string, unknown> {
         <div class="tile__sub">{{ unitCount }} units</div>
         <a class="tile__link" routerLink="/buildings">View buildings</a>
       </div>
+
+      <div class="tile" [class.tile--warn]="warningCount > 0">
+        <div class="tile__label">Warnings</div>
+        <div class="tile__value">{{ warningCount }}</div>
+        <div class="tile__sub">Overdue bills/invoices, bounced cheques, variances, and more</div>
+        <a class="tile__link" routerLink="/reports/compliance-dashboard">View warnings</a>
+      </div>
     </div>
   `,
   styles: [
@@ -178,8 +186,13 @@ export class DashboardComponent implements OnInit {
   lowStockItems: InventoryItemRow[] = [];
   buildingCount = 0;
   unitCount = 0;
+  warningCount = 0;
 
-  constructor(private readonly api: CrudApiService, private readonly reportsApi: ReportsApiService) {}
+  constructor(
+    private readonly api: CrudApiService,
+    private readonly reportsApi: ReportsApiService,
+    private readonly warningsApi: WarningsApiService
+  ) {}
 
   ngOnInit(): void {
     const today = toLocalDateString(new Date());
@@ -217,6 +230,7 @@ export class DashboardComponent implements OnInit {
       inventoryItems: this.api.list<InventoryItemRow>('inventory-items', { page: 1, page_size: 200 }),
       buildings: this.api.list('buildings', { page: 1, page_size: 1 }),
       units: this.api.list('units', { page: 1, page_size: 1 }),
+      warnings: this.warningsApi.getWarnings(),
     }).subscribe({
       next: (res) => {
         this.balanced = res.trialBalance.total_debit === res.trialBalance.total_credit;
@@ -232,6 +246,7 @@ export class DashboardComponent implements OnInit {
         this.lowStockItems = res.inventoryItems.data.filter((i) => i.quantity_on_hand <= LOW_STOCK_THRESHOLD);
         this.buildingCount = res.buildings.meta.total;
         this.unitCount = res.units.meta.total;
+        this.warningCount = res.warnings.total;
       },
     });
   }

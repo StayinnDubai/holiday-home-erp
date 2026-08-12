@@ -18,14 +18,21 @@ interface EjariRegistrationRow {
   end_date: string | null;
 }
 
+interface DtcmPermitRow {
+  id: string;
+  permit_number: string;
+  status: string;
+  expiry_date: string | null;
+}
+
 /**
  * "All links to that unit" (landlord, tenancy contract, Ejari, DTCM permit,
  * move-in permit, rental agreement) shown at the bottom of the unit edit view.
  * Landlord comes straight off the unit record (already loaded, no extra call).
- * Tenancy Contracts and Ejari Registrations have real backends, filtered by
- * unit_id. DTCM Permits, Move-in Permits and Rental Agreements don't have a
- * backend yet (frontend-only stub pages) -- shown honestly as not-yet-built
- * rather than faked.
+ * Tenancy Contracts, Ejari Registrations, and DTCM Permits have real backends,
+ * filtered by unit_id. Move-in Permits and Rental Agreements don't have a backend
+ * yet (frontend-only stub pages) -- shown honestly as not-yet-built rather than
+ * faked.
  */
 @Component({
   selector: 'app-related-records-field',
@@ -55,9 +62,12 @@ interface EjariRegistrationRow {
         <ng-template #noneEjari><p class="related-records__none">{{ loading ? 'Loading…' : 'None linked.' }}</p></ng-template>
       </div>
 
-      <div class="related-records__group related-records__group--stub">
-        <h4>DTCM permit</h4>
-        <p class="related-records__none">Module not yet built.</p>
+      <div class="related-records__group">
+        <h4>DTCM permits <a routerLink="/permits/dtcm" class="related-records__link">View all →</a></h4>
+        <ul *ngIf="dtcmPermits.length; else noneDtcm">
+          <li *ngFor="let p of dtcmPermits">{{ p.permit_number }} — {{ p.status }}<span *ngIf="p.expiry_date"> — expires {{ p.expiry_date }}</span></li>
+        </ul>
+        <ng-template #noneDtcm><p class="related-records__none">{{ loading ? 'Loading…' : 'None linked.' }}</p></ng-template>
       </div>
       <div class="related-records__group related-records__group--stub">
         <h4>Move-in permit</h4>
@@ -123,6 +133,7 @@ export class RelatedRecordsFieldComponent implements OnChanges {
 
   contracts: TenancyContractRow[] = [];
   ejariRegistrations: EjariRegistrationRow[] = [];
+  dtcmPermits: DtcmPermitRow[] = [];
   loading = false;
 
   constructor(private readonly api: CrudApiService) {}
@@ -147,6 +158,11 @@ export class RelatedRecordsFieldComponent implements OnChanges {
     this.api.list<EjariRegistrationRow>('ejari-registrations', { page: 1, page_size: 50 }, { unit_id: this.unitId }).subscribe({
       next: (res) => {
         this.ejariRegistrations = res.data;
+      },
+    });
+    this.api.list<DtcmPermitRow>('dtcm-permits', { page: 1, page_size: 50 }, { unit_id: this.unitId }).subscribe({
+      next: (res) => {
+        this.dtcmPermits = res.data;
       },
     });
   }

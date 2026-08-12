@@ -5,7 +5,7 @@ every other module. No app_user / auth tables here yet (deferred, plan §7).
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,6 +70,61 @@ class Currency(AuditableRecord, Base):
     # only in v1: JournalEntryLine has no currency field, so the GL itself stays
     # single-currency -- this doesn't retrofit conversion into postings/reports.
     rate_to_base: Mapped[float | None] = mapped_column(Numeric(18, 6, asdecimal=False))
+
+
+# doc §5.7: VAT treatment options. `reverse_charge` only makes real accounting sense
+# on the purchase/import side (see posting_rules/tax.py) -- kept here as a shared
+# constant rather than duplicated in both accounting.py posting modules.
+TAX_TREATMENTS = ("standard", "exempt", "zero", "reverse_charge")
+
+
+class TaxCode(AuditableRecord, Base):
+    """Settings > Tax Codes (doc §5.7) -- central VAT configuration: rate, treatment,
+    effective dates. Never hard-coded 5% -- Bill/Invoice pick a TaxCode and store
+    their own `tax_amount` (entered/computed client-side from `amount * rate`, not
+    server-derived, matching every other numeric field in this codebase). Posting
+    the VAT itself is posting_rules/tax.py's job, not this model's."""
+
+    __tablename__ = "tax_code"
+
+    code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    rate: Mapped[float] = mapped_column(Numeric(6, 3, asdecimal=False), default=0)
+    treatment: Mapped[str] = mapped_column(String(20), default="standard")  # one of TAX_TREATMENTS
+    effective_from: Mapped[date | None] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date)
+
+
+class AssetCategory(AuditableRecord, Base):
+    """Settings > Asset Categories -- fixed-asset depreciation setup. Pure reference
+    data in v1: there's no Fixed Asset Register tracking individual assets yet, so
+    nothing posts depreciation against these categories -- they exist so that
+    register can be configured against real categories once it's built, same as the
+    doc's own note that "v1 posting logic implements straight-line only... unused"."""
+
+    __tablename__ = "asset_category"
+
+    code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    useful_life_months: Mapped[int | None] = mapped_column(Integer)
+    method: Mapped[str] = mapped_column(String(20), default="linear")  # linear|reducing_balance|sum_of_years|custom
+    residual_pct: Mapped[float | None] = mapped_column(Numeric(5, 2, asdecimal=False))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class CostType(AuditableRecord, Base):
+    """Settings > Cost Categories (doc §7.8 describes a two-level type/subtype tree,
+    kept flat here for v1). Pure reference data -- classifies ongoing operational
+    costs (distinct from Setup Cost Types, a separate one-time-setup-cost concept
+    not built in this pass)."""
+
+    __tablename__ = "cost_type"
+
+    type: Mapped[str] = mapped_column(String(100))
+    subtype: Mapped[str | None] = mapped_column(String(100))
+    direct_or_overhead: Mapped[str] = mapped_column(String(20), default="direct")  # direct|overhead
+    recurring: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class AuditLog(IdMixin, Base):

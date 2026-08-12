@@ -43,6 +43,14 @@ export class AttachmentApiService {
     return this.http.get<ListResponse<AttachmentRecord>>(`${API_BASE_URL}/attachments`, { params });
   }
 
+  /** No entity_type/entity_id filter -- every attachment across every module,
+   * paginated. Backs the Documents register (features/documents). */
+  listAll(page: number, pageSize: number, q?: string): Observable<ListResponse<AttachmentRecord>> {
+    let params = new HttpParams().set('page', page).set('page_size', pageSize).set('sort_by', 'created_at').set('sort_dir', 'desc');
+    if (q) params = params.set('q', q);
+    return this.http.get<ListResponse<AttachmentRecord>>(`${API_BASE_URL}/attachments`, { params });
+  }
+
   upload(entityType: string, entityId: string, file: File, documentName?: string): Observable<ItemResponse<AttachmentRecord>> {
     const form = new FormData();
     form.append('entity_type', entityType);

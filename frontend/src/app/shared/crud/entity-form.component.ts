@@ -253,6 +253,9 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
         flex-direction: column;
         gap: 0.35rem;
       }
+      .entity-form__field[hidden] {
+        display: none;
+      }
       .entity-form__field label {
         font-size: 0.85rem;
         font-weight: 600;

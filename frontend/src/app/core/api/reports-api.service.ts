@@ -42,6 +42,34 @@ export interface BalanceSheet {
   current_year_result: number;
 }
 
+export interface AgedPayableLine {
+  bill_id: string;
+  bill_number: string;
+  supplier_name: string;
+  due_date: string | null;
+  amount: number;
+  bucket: string;
+}
+
+export interface AgedPayables {
+  as_of: string;
+  lines: AgedPayableLine[];
+  bucket_totals: Record<string, number>;
+  grand_total: number;
+}
+
+export interface ChequePositionGroup {
+  direction: string;
+  status: string;
+  count: number;
+  total_amount: number;
+}
+
+export interface ChequePosition {
+  as_of: string;
+  groups: ChequePositionGroup[];
+}
+
 /**
  * Financial Reports (backend/app/routers/reports.py) -- a dedicated client rather than
  * CrudApiService, since these are single-object aggregation results (not the
@@ -63,5 +91,13 @@ export class ReportsApiService {
 
   balanceSheet(asOf: string): Observable<BalanceSheet> {
     return this.http.get<BalanceSheet>(`${API_BASE_URL}/reports/balance-sheet`, { params: new HttpParams().set('as_of', asOf) });
+  }
+
+  agedPayables(asOf: string): Observable<AgedPayables> {
+    return this.http.get<AgedPayables>(`${API_BASE_URL}/reports/aged-payables`, { params: new HttpParams().set('as_of', asOf) });
+  }
+
+  chequePosition(asOf: string): Observable<ChequePosition> {
+    return this.http.get<ChequePosition>(`${API_BASE_URL}/reports/cheque-position`, { params: new HttpParams().set('as_of', asOf) });
   }
 }

@@ -1,7 +1,7 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
 import { formatAmount } from '../../shared/utils/amount';
 import { COUNTERPARTIES_CONFIG } from '../counterparties/counterparties.config';
-import { CURRENCIES_CONFIG } from '../settings/settings.config';
+import { CURRENCIES_CONFIG, TAX_CODES_CONFIG } from '../settings/settings.config';
 
 /** Plan §3.5 `account` / doc §2.0, Appendix A. All 108 accounts are seeded in the
  * backend (app/seed/chart_of_accounts.py, transcribed verbatim from Appendix A);
@@ -262,43 +262,89 @@ export const BANK_ACCOUNTS_CONFIG: EntityPageConfig = {
   ],
 };
 
-/** Plan §3.5 `cash_transaction`. */
+/** Plan §3.5 `cash_transaction`. A cash transaction is already a real, immediate
+ * event the moment it's recorded (like a Cheque at 'on_hand') -- it posts
+ * unconditionally on create (posting_rules/cash_transaction.py), moving "1020 Cash
+ * on hand - petty cash" against `contra_account_id` in the direction `direction`
+ * says. No draft/recorded staging like Bill/Invoice. */
 export const CASH_LEDGER_CONFIG: EntityPageConfig = {
   title: 'Cash Ledger',
-  subtitle: 'Petty cash and cash collections by location/custodian (doc §2.2).',
+  subtitle: 'Petty cash and cash collections by location/custodian (doc §2.2). Posts immediately on save.',
   resourcePath: 'cash-transactions',
+  auditEntityType: 'cash_transaction',
   fields: [
-    { key: 'date', label: 'Date', type: 'date', required: true },
-    { key: 'custodian_user_id', label: 'Custodian', type: 'text' },
-    { key: 'location', label: 'Location', type: 'text' },
-    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridValueFormatter: formatAmount },
-    { key: 'category', label: 'Category', type: 'text' },
-    { key: 'counterparty_id', label: 'Counterparty ID', type: 'text' },
-    { key: 'reference', label: 'Reference', type: 'text' },
-  ],
-};
-
-/** Plan §3.5 `invoice`. Same object for sales + purchase per doc §2.9. */
-export const INVOICES_CONFIG: EntityPageConfig = {
-  title: 'Invoices',
-  subtitle: 'Sales (to guests/tenants/landlords) and purchase invoices share one object (doc §2.9).',
-  resourcePath: 'invoices',
-  fields: [
-    { key: 'invoice_number', label: 'Invoice number', type: 'text', gridWidth: 150 },
+    { key: 'date', label: 'Date', type: 'date', required: true, gridWidth: 120 },
     {
       key: 'direction',
       label: 'Direction',
       type: 'select',
       required: true,
       options: [
-        { label: 'Sales', value: 'sales' },
-        { label: 'Purchase', value: 'purchase' },
+        { label: 'In', value: 'in' },
+        { label: 'Out', value: 'out' },
       ],
+      gridWidth: 100,
     },
-    { key: 'counterparty_id', label: 'Counterparty ID', type: 'text', required: true },
-    { key: 'date', label: 'Date', type: 'date' },
-    { key: 'due_date', label: 'Due date', type: 'date' },
-    { key: 'total_amount', label: 'Total (AED)', type: 'number', gridValueFormatter: formatAmount },
+    { key: 'custodian_user_id', label: 'Custodian', type: 'text', gridWidth: 150 },
+    { key: 'location', label: 'Location', type: 'text', gridWidth: 150 },
+    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridWidth: 130, gridValueFormatter: formatAmount },
+    { key: 'category', label: 'Category', type: 'text', gridWidth: 150 },
+    {
+      key: 'counterparty_id',
+      label: 'Counterparty',
+      type: 'relation-select',
+      relationResourcePath: 'counterparties',
+      relationLabelKey: 'name',
+      relationCreateFields: COUNTERPARTIES_CONFIG.fields,
+      showInGrid: false,
+    },
+    { key: 'counterparty_name', label: 'Counterparty', type: 'text', showInForm: false, gridWidth: 180 },
+    { key: 'reference', label: 'Reference', type: 'text', gridWidth: 150 },
+    {
+      key: 'contra_account_id',
+      label: 'Contra account',
+      type: 'relation-select',
+      relationResourcePath: 'accounts',
+      relationLabelKey: 'code',
+      showInGrid: false,
+    },
+    { key: 'contra_account_code', label: 'Contra account', type: 'text', showInForm: false, gridWidth: 130 },
+  ],
+};
+
+/** Accounts receivable -- mirrors BILLS_CONFIG's shape, reversed for the revenue
+ * side (backend/app/posting_rules/invoice.py). Scoped AR-only: the purchase side is
+ * already Bills' job. `tax_amount` is entered manually, matching Bills. */
+export const INVOICES_CONFIG: EntityPageConfig = {
+  title: 'Invoices',
+  subtitle: 'Accounts receivable -- invoices to guests, tenants, and landlords.',
+  resourcePath: 'invoices',
+  auditEntityType: 'invoice',
+  fields: [
+    { key: 'invoice_number', label: 'Invoice number', type: 'text', gridWidth: 150, showInForm: false },
+    {
+      key: 'customer_counterparty_id',
+      label: 'Customer',
+      type: 'relation-select',
+      required: true,
+      relationResourcePath: 'counterparties',
+      relationLabelKey: 'name',
+      relationCreateFields: COUNTERPARTIES_CONFIG.fields,
+      showInGrid: false,
+    },
+    { key: 'customer_name', label: 'Customer', type: 'text', showInForm: false, gridWidth: 200 },
+    {
+      key: 'unit_id',
+      label: 'Unit',
+      type: 'relation-select',
+      relationResourcePath: 'units',
+      relationLabelKey: 'unit_code',
+      showInGrid: false,
+    },
+    { key: 'unit_code', label: 'Unit', type: 'text', showInForm: false, gridWidth: 110 },
+    { key: 'invoice_date', label: 'Invoice date', type: 'date', gridWidth: 120 },
+    { key: 'due_date', label: 'Due date', type: 'date', gridWidth: 120 },
+    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridWidth: 130, gridValueFormatter: formatAmount },
     {
       key: 'status',
       label: 'Status',
@@ -313,7 +359,37 @@ export const INVOICES_CONFIG: EntityPageConfig = {
         { label: 'Part paid', value: 'part_paid' },
         { label: 'Cancelled', value: 'cancelled' },
       ],
+      gridWidth: 130,
     },
+    {
+      key: 'contra_account_id',
+      label: 'Revenue account',
+      type: 'relation-select',
+      relationResourcePath: 'accounts',
+      relationLabelKey: 'code',
+      showInGrid: false,
+    },
+    { key: 'contra_account_code', label: 'Revenue account', type: 'text', showInForm: false, gridWidth: 130 },
+    {
+      key: 'bank_account_id',
+      label: 'Received into (bank account)',
+      type: 'relation-select',
+      relationResourcePath: 'bank-accounts',
+      relationLabelKey: 'account_name',
+      showInGrid: false,
+    },
+    { key: 'bank_account_label', label: 'Received into', type: 'text', showInForm: false, gridWidth: 180 },
+    {
+      key: 'tax_code_id',
+      label: 'Tax code',
+      type: 'relation-select',
+      relationResourcePath: 'tax-codes',
+      relationLabelKey: 'name',
+      relationCreateFields: TAX_CODES_CONFIG.fields,
+      showInGrid: false,
+    },
+    { key: 'tax_code_label', label: 'Tax code', type: 'text', showInForm: false, gridWidth: 140 },
+    { key: 'tax_amount', label: 'Tax amount (AED)', type: 'number', gridWidth: 130, gridValueFormatter: formatAmount },
   ],
 };
 

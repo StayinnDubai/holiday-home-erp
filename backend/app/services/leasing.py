@@ -5,16 +5,24 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
 from app.core.pagination import PaginationParams, apply_filters, paginate
-from app.models.leasing import EjariRegistration, TenancyContract, TenancyContractParty
+from app.models.leasing import (
+    EjariRegistration,
+    TenancyContract,
+    TenancyContractAdjustment,
+    TenancyContractParty,
+)
 from app.models.master_data import Counterparty, Unit
 from app.schemas.leasing import (
     EjariRegistrationCreate,
     EjariRegistrationUpdate,
+    TenancyContractAdjustmentCreate,
+    TenancyContractAdjustmentUpdate,
     TenancyContractCreate,
     TenancyContractUpdate,
 )
 from app.services.audit import AuditService
 from app.services.numbering import NumberingService
+from app.services.rent_schedule import RentScheduleService
 
 # doc §1.4: "A unit cannot have two overlapping active inbound contracts." Extended to
 # drafts too, so two overlapping drafts for the same unit don't sit unnoticed until
@@ -92,6 +100,10 @@ class TenancyContractService:
         for landlord_id in payload.landlord_ids:
             db.add(TenancyContractParty(contract_id=row.id, landlord_id=landlord_id))
 
+        if row.status == "active" and row.auto_calculate_rent and not row.rent_schedule_generated:
+            db.flush()  # autoflush is off (core/db.py) -- the parties above must be visible first
+            RentScheduleService.generate(db, row)
+
         AuditService.log(db, entity_type="tenancy_contract", entity_id=row.id, action="create")
         db.commit()
         db.refresh(row)
@@ -134,6 +146,10 @@ class TenancyContractService:
             db.query(TenancyContractParty).filter(TenancyContractParty.contract_id == contract_id).delete()
             for landlord_id in payload.landlord_ids:
                 db.add(TenancyContractParty(contract_id=contract_id, landlord_id=landlord_id))
+
+        if row.status == "active" and row.auto_calculate_rent and not row.rent_schedule_generated:
+            db.flush()  # autoflush is off (core/db.py) -- pending party changes above must be visible first
+            RentScheduleService.generate(db, row)
 
         AuditService.log(db, entity_type="tenancy_contract", entity_id=row.id, action="update")
         db.commit()
@@ -407,3 +423,116 @@ class EjariRegistrationService:
                 warnings.append("Security deposit differs from the contract")
 
         return warnings
+
+
+# ---------------------------------------------------------------------------
+# Tenancy contract adjustments (discount / grace period / compensation)
+# ---------------------------------------------------------------------------
+class TenancyContractAdjustmentService:
+    """Discount / grace period / other landlord compensation, read by
+    services/rent_schedule.py -- see TenancyContractAdjustment's model docstring."""
+
+    @staticmethod
+    def list_page(
+        db: Session, params: PaginationParams, contract_id: uuid.UUID | None = None
+    ) -> tuple[list[TenancyContractAdjustment], int]:
+        stmt = select(TenancyContractAdjustment).where(TenancyContractAdjustment.is_deleted.is_(False))
+        if contract_id is not None:
+            stmt = stmt.where(TenancyContractAdjustment.contract_id == contract_id)
+        needs_contract_join = params.sort_by == "contract_number" or "contract_number" in (params.filter_model or {})
+        if needs_contract_join:
+            stmt = stmt.join(TenancyContract, TenancyContract.id == TenancyContractAdjustment.contract_id)
+        stmt = apply_filters(
+            stmt,
+            TenancyContractAdjustment,
+            params.filter_model,
+            extra_columns={"contract_number": TenancyContract.contract_number} if needs_contract_join else None,
+        )
+        if params.sort_by == "contract_number":
+            col = TenancyContract.contract_number
+        else:
+            col = _sort_col(TenancyContractAdjustment, params.sort_by, TenancyContractAdjustment.start_date)
+        stmt = stmt.order_by(col.desc() if params.sort_dir != "asc" else col.asc())
+        rows, total = paginate(db, stmt, params)
+        TenancyContractAdjustmentService._attach_relations(db, rows)
+        return rows, total
+
+    @staticmethod
+    def get(db: Session, adjustment_id: uuid.UUID) -> TenancyContractAdjustment:
+        row = db.get(TenancyContractAdjustment, adjustment_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Adjustment not found.", code="not_found", status_code=404)
+        TenancyContractAdjustmentService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: TenancyContractAdjustmentCreate) -> TenancyContractAdjustment:
+        TenancyContractAdjustmentService._validate_contract(db, payload.contract_id)
+        TenancyContractAdjustmentService._validate_type_fields(
+            payload.type, payload.discount_pct, payload.amount
+        )
+        row = TenancyContractAdjustment(**payload.model_dump())
+        db.add(row)
+        db.flush()
+        AuditService.log(db, entity_type="tenancy_contract_adjustment", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        TenancyContractAdjustmentService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def update(
+        db: Session, adjustment_id: uuid.UUID, payload: TenancyContractAdjustmentUpdate
+    ) -> TenancyContractAdjustment:
+        row = db.get(TenancyContractAdjustment, adjustment_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Adjustment not found.", code="not_found", status_code=404)
+
+        data = payload.model_dump(exclude_unset=True)
+        if "contract_id" in data:
+            TenancyContractAdjustmentService._validate_contract(db, data["contract_id"])
+
+        new_type = data.get("type", row.type)
+        new_discount_pct = data.get("discount_pct", row.discount_pct)
+        new_amount = data.get("amount", row.amount)
+        TenancyContractAdjustmentService._validate_type_fields(new_type, new_discount_pct, new_amount)
+
+        for field, value in data.items():
+            setattr(row, field, value)
+
+        AuditService.log(db, entity_type="tenancy_contract_adjustment", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        TenancyContractAdjustmentService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, adjustment_id: uuid.UUID) -> None:
+        row = db.get(TenancyContractAdjustment, adjustment_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Adjustment not found.", code="not_found", status_code=404)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="tenancy_contract_adjustment", entity_id=row.id, action="delete")
+        db.commit()
+
+    @staticmethod
+    def _validate_contract(db: Session, contract_id: uuid.UUID) -> None:
+        contract = db.get(TenancyContract, contract_id)
+        if contract is None or contract.is_deleted:
+            raise ApiError("Selected contract does not exist.", code="invalid_reference", status_code=400)
+
+    @staticmethod
+    def _validate_type_fields(adj_type: str, discount_pct: float | None, amount: float | None) -> None:
+        if adj_type == "discount" and not discount_pct:
+            raise ApiError("A discount adjustment needs a discount %.", code="discount_pct_required", status_code=400)
+        if adj_type == "compensation" and not amount:
+            raise ApiError("A compensation adjustment needs an amount.", code="amount_required", status_code=400)
+
+    @staticmethod
+    def _attach_relations(db: Session, rows: list[TenancyContractAdjustment]) -> None:
+        if not rows:
+            return
+        contract_ids = [r.contract_id for r in rows]
+        contracts = {c.id: c.contract_number for c in db.scalars(select(TenancyContract).where(TenancyContract.id.in_(contract_ids))).all()}
+        for r in rows:
+            r.contract_number = contracts.get(r.contract_id)

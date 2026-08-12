@@ -11,14 +11,19 @@ from app.models.accounting import (
     BankAccountColumn,
     BankStatementEntry,
     Bill,
+    CashTransaction,
     Cheque,
+    Invoice,
     JournalEntry,
     JournalEntryLine,
 )
-from app.models.foundation import Currency
+from app.models.foundation import Currency, TaxCode
+from app.models.leasing import TenancyContract
 from app.models.master_data import Counterparty, Unit
 from app.posting_rules import bill as bill_posting
+from app.posting_rules import cash_transaction as cash_transaction_posting
 from app.posting_rules import cheque as cheque_posting
+from app.posting_rules import invoice as invoice_posting
 from app.schemas.accounting import (
     AccountCreate,
     AccountUpdate,
@@ -30,13 +35,23 @@ from app.schemas.accounting import (
     BankStatementEntryUpdate,
     BillCreate,
     BillUpdate,
+    CashTransactionCreate,
+    CashTransactionUpdate,
     ChequeCreate,
     ChequeUpdate,
+    InvoiceCreate,
+    InvoiceUpdate,
     JournalEntryCreate,
     JournalEntryUpdate,
 )
 from app.services.audit import AuditService
 from app.services.numbering import NumberingService
+
+
+def _validate_tax_code(db: Session, tax_code_id: uuid.UUID) -> None:
+    tax_code = db.get(TaxCode, tax_code_id)
+    if tax_code is None or tax_code.is_deleted:
+        raise ApiError("Selected tax code does not exist.", code="invalid_reference", status_code=400)
 
 # Only 'posted' entries move a balance -- draft/submitted/approved are visible but inert.
 JOURNAL_ENTRY_LOCKED_STATUSES = ("posted", "reversed")
@@ -345,6 +360,8 @@ class BillService:
     @staticmethod
     def create(db: Session, payload: BillCreate) -> Bill:
         BillService._validate_supplier(db, payload.supplier_counterparty_id)
+        if payload.tax_code_id is not None:
+            _validate_tax_code(db, payload.tax_code_id)
 
         row = Bill(bill_number=NumberingService.next(db, "bill"), **payload.model_dump())
         db.add(row)
@@ -366,6 +383,8 @@ class BillService:
         data = payload.model_dump(exclude_unset=True)
         if "supplier_counterparty_id" in data:
             BillService._validate_supplier(db, data["supplier_counterparty_id"])
+        if data.get("tax_code_id") is not None:
+            _validate_tax_code(db, data["tax_code_id"])
 
         old_status = row.status
         for field, value in data.items():
@@ -425,11 +444,267 @@ class BillService:
                 a.id: a.account_name for a in db.scalars(select(BankAccount).where(BankAccount.id.in_(bank_account_ids))).all()
             }
 
+        tax_code_ids = [r.tax_code_id for r in rows if r.tax_code_id]
+        tax_codes: dict[uuid.UUID, str] = {}
+        if tax_code_ids:
+            tax_codes = {t.id: t.name for t in db.scalars(select(TaxCode).where(TaxCode.id.in_(tax_code_ids))).all()}
+
+        tenancy_contract_ids = [r.tenancy_contract_id for r in rows if r.tenancy_contract_id]
+        tenancy_contracts: dict[uuid.UUID, str] = {}
+        if tenancy_contract_ids:
+            tenancy_contracts = {
+                c.id: c.contract_number
+                for c in db.scalars(select(TenancyContract).where(TenancyContract.id.in_(tenancy_contract_ids))).all()
+            }
+
         for r in rows:
             r.supplier_name = suppliers.get(r.supplier_counterparty_id)
             r.unit_code = units.get(r.unit_id) if r.unit_id else None
             r.contra_account_code = contra_accounts.get(r.contra_account_id) if r.contra_account_id else None
             r.bank_account_label = bank_accounts.get(r.bank_account_id) if r.bank_account_id else None
+            r.tax_code_label = tax_codes.get(r.tax_code_id) if r.tax_code_id else None
+            r.tenancy_contract_number = tenancy_contracts.get(r.tenancy_contract_id) if r.tenancy_contract_id else None
+
+
+class InvoiceService:
+    """Accounts receivable -- direct mirror of BillService, reversed for the
+    revenue side (see posting_rules/invoice.py)."""
+
+    @staticmethod
+    def list_page(db: Session, params: PaginationParams) -> tuple[list[Invoice], int]:
+        stmt = select(Invoice).where(Invoice.is_deleted.is_(False))
+        if params.q:
+            stmt = stmt.where(Invoice.invoice_number.ilike(f"%{params.q}%"))
+        needs_customer_join = params.sort_by == "customer_name" or "customer_name" in (params.filter_model or {})
+        if needs_customer_join:
+            stmt = stmt.join(Counterparty, Counterparty.id == Invoice.customer_counterparty_id)
+        stmt = apply_filters(
+            stmt, Invoice, params.filter_model, extra_columns={"customer_name": Counterparty.name} if needs_customer_join else None
+        )
+        if params.sort_by == "customer_name":
+            col = Counterparty.name
+        else:
+            col = _sort_col(Invoice, params.sort_by, Invoice.invoice_date)
+        stmt = stmt.order_by(col.desc() if params.sort_dir != "asc" else col.asc())
+        rows, total = paginate(db, stmt, params)
+        InvoiceService._attach_relations(db, rows)
+        return rows, total
+
+    @staticmethod
+    def get(db: Session, invoice_id: uuid.UUID) -> Invoice:
+        row = db.get(Invoice, invoice_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Invoice not found.", code="not_found", status_code=404)
+        InvoiceService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: InvoiceCreate) -> Invoice:
+        InvoiceService._validate_customer(db, payload.customer_counterparty_id)
+        if payload.tax_code_id is not None:
+            _validate_tax_code(db, payload.tax_code_id)
+
+        row = Invoice(invoice_number=NumberingService.next(db, "invoice"), **payload.model_dump())
+        db.add(row)
+        db.flush()
+        if row.status == "recorded":
+            invoice_posting.post_invoice_recorded(db, row)
+        AuditService.log(db, entity_type="invoice", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        InvoiceService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def update(db: Session, invoice_id: uuid.UUID, payload: InvoiceUpdate) -> Invoice:
+        row = db.get(Invoice, invoice_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Invoice not found.", code="not_found", status_code=404)
+
+        data = payload.model_dump(exclude_unset=True)
+        if "customer_counterparty_id" in data:
+            InvoiceService._validate_customer(db, data["customer_counterparty_id"])
+        if data.get("tax_code_id") is not None:
+            _validate_tax_code(db, data["tax_code_id"])
+
+        old_status = row.status
+        for field, value in data.items():
+            setattr(row, field, value)
+
+        if row.status == "recorded" and old_status != "recorded":
+            invoice_posting.post_invoice_recorded(db, row)
+        if row.status == "paid" and old_status != "paid":
+            invoice_posting.post_invoice_paid(db, row)
+
+        AuditService.log(db, entity_type="invoice", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        InvoiceService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, invoice_id: uuid.UUID) -> None:
+        row = db.get(Invoice, invoice_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Invoice not found.", code="not_found", status_code=404)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="invoice", entity_id=row.id, action="delete")
+        db.commit()
+
+    @staticmethod
+    def _validate_customer(db: Session, counterparty_id: uuid.UUID) -> None:
+        customer = db.get(Counterparty, counterparty_id)
+        if customer is None or customer.is_deleted:
+            raise ApiError("Selected customer does not exist.", code="invalid_reference", status_code=400)
+
+    @staticmethod
+    def _attach_relations(db: Session, rows: list[Invoice]) -> None:
+        if not rows:
+            return
+        customer_ids = [r.customer_counterparty_id for r in rows]
+        customers = {
+            c.id: c.name for c in db.scalars(select(Counterparty).where(Counterparty.id.in_(customer_ids))).all()
+        }
+
+        unit_ids = [r.unit_id for r in rows if r.unit_id]
+        units: dict[uuid.UUID, str] = {}
+        if unit_ids:
+            units = {u.id: u.unit_code for u in db.scalars(select(Unit).where(Unit.id.in_(unit_ids))).all()}
+
+        contra_account_ids = [r.contra_account_id for r in rows if r.contra_account_id]
+        contra_accounts: dict[uuid.UUID, str] = {}
+        if contra_account_ids:
+            contra_accounts = {
+                a.id: a.code for a in db.scalars(select(Account).where(Account.id.in_(contra_account_ids))).all()
+            }
+
+        bank_account_ids = [r.bank_account_id for r in rows if r.bank_account_id]
+        bank_accounts: dict[uuid.UUID, str] = {}
+        if bank_account_ids:
+            bank_accounts = {
+                a.id: a.account_name for a in db.scalars(select(BankAccount).where(BankAccount.id.in_(bank_account_ids))).all()
+            }
+
+        tax_code_ids = [r.tax_code_id for r in rows if r.tax_code_id]
+        tax_codes: dict[uuid.UUID, str] = {}
+        if tax_code_ids:
+            tax_codes = {t.id: t.name for t in db.scalars(select(TaxCode).where(TaxCode.id.in_(tax_code_ids))).all()}
+
+        for r in rows:
+            r.customer_name = customers.get(r.customer_counterparty_id)
+            r.unit_code = units.get(r.unit_id) if r.unit_id else None
+            r.contra_account_code = contra_accounts.get(r.contra_account_id) if r.contra_account_id else None
+            r.bank_account_label = bank_accounts.get(r.bank_account_id) if r.bank_account_id else None
+            r.tax_code_label = tax_codes.get(r.tax_code_id) if r.tax_code_id else None
+
+
+class CashTransactionService:
+    """Accounting > Cash Ledger -- posts unconditionally on create (mirrors
+    ChequeService.create calling post_cheque_received unconditionally), since a
+    cash transaction is already a real, immediate event (see posting_rules/
+    cash_transaction.py)."""
+
+    @staticmethod
+    def list_page(db: Session, params: PaginationParams) -> tuple[list[CashTransaction], int]:
+        stmt = select(CashTransaction).where(CashTransaction.is_deleted.is_(False))
+        if params.q:
+            stmt = stmt.where(CashTransaction.reference.ilike(f"%{params.q}%") | CashTransaction.category.ilike(f"%{params.q}%"))
+        needs_counterparty_join = params.sort_by == "counterparty_name" or "counterparty_name" in (params.filter_model or {})
+        if needs_counterparty_join:
+            stmt = stmt.outerjoin(Counterparty, Counterparty.id == CashTransaction.counterparty_id)
+        stmt = apply_filters(
+            stmt,
+            CashTransaction,
+            params.filter_model,
+            extra_columns={"counterparty_name": Counterparty.name} if needs_counterparty_join else None,
+        )
+        if params.sort_by == "counterparty_name":
+            col = Counterparty.name
+        else:
+            col = _sort_col(CashTransaction, params.sort_by, CashTransaction.date)
+        stmt = stmt.order_by(col.desc() if params.sort_dir != "asc" else col.asc())
+        rows, total = paginate(db, stmt, params)
+        CashTransactionService._attach_relations(db, rows)
+        return rows, total
+
+    @staticmethod
+    def get(db: Session, txn_id: uuid.UUID) -> CashTransaction:
+        row = db.get(CashTransaction, txn_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Cash transaction not found.", code="not_found", status_code=404)
+        CashTransactionService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def create(db: Session, payload: CashTransactionCreate) -> CashTransaction:
+        if payload.counterparty_id is not None:
+            CashTransactionService._validate_counterparty(db, payload.counterparty_id)
+
+        row = CashTransaction(**payload.model_dump())
+        db.add(row)
+        db.flush()
+        cash_transaction_posting.post_cash_transaction(db, row)
+        AuditService.log(db, entity_type="cash_transaction", entity_id=row.id, action="create")
+        db.commit()
+        db.refresh(row)
+        CashTransactionService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def update(db: Session, txn_id: uuid.UUID, payload: CashTransactionUpdate) -> CashTransaction:
+        row = db.get(CashTransaction, txn_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Cash transaction not found.", code="not_found", status_code=404)
+
+        data = payload.model_dump(exclude_unset=True)
+        if data.get("counterparty_id") is not None:
+            CashTransactionService._validate_counterparty(db, data["counterparty_id"])
+
+        for field, value in data.items():
+            setattr(row, field, value)
+
+        AuditService.log(db, entity_type="cash_transaction", entity_id=row.id, action="update")
+        db.commit()
+        db.refresh(row)
+        CashTransactionService._attach_relations(db, [row])
+        return row
+
+    @staticmethod
+    def soft_delete(db: Session, txn_id: uuid.UUID) -> None:
+        row = db.get(CashTransaction, txn_id)
+        if row is None or row.is_deleted:
+            raise ApiError("Cash transaction not found.", code="not_found", status_code=404)
+        row.is_deleted = True
+        AuditService.log(db, entity_type="cash_transaction", entity_id=row.id, action="delete")
+        db.commit()
+
+    @staticmethod
+    def _validate_counterparty(db: Session, counterparty_id: uuid.UUID) -> None:
+        counterparty = db.get(Counterparty, counterparty_id)
+        if counterparty is None or counterparty.is_deleted:
+            raise ApiError("Selected counterparty does not exist.", code="invalid_reference", status_code=400)
+
+    @staticmethod
+    def _attach_relations(db: Session, rows: list[CashTransaction]) -> None:
+        if not rows:
+            return
+        counterparty_ids = [r.counterparty_id for r in rows if r.counterparty_id]
+        counterparties: dict[uuid.UUID, str] = {}
+        if counterparty_ids:
+            counterparties = {
+                c.id: c.name for c in db.scalars(select(Counterparty).where(Counterparty.id.in_(counterparty_ids))).all()
+            }
+
+        contra_account_ids = [r.contra_account_id for r in rows if r.contra_account_id]
+        contra_accounts: dict[uuid.UUID, str] = {}
+        if contra_account_ids:
+            contra_accounts = {
+                a.id: a.code for a in db.scalars(select(Account).where(Account.id.in_(contra_account_ids))).all()
+            }
+
+        for r in rows:
+            r.counterparty_name = counterparties.get(r.counterparty_id) if r.counterparty_id else None
+            r.contra_account_code = contra_accounts.get(r.contra_account_id) if r.contra_account_id else None
 
 
 class BankAccountService:

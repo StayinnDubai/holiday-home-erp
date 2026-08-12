@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.routers import (
     accounts,
+    asset_categories,
     attachments,
     audit_log,
     bank_account_columns,
@@ -15,23 +16,31 @@ from app.routers import (
     building_contacts,
     building_deposits,
     buildings,
+    cash_transactions,
     cheques,
     comments,
     company,
+    cost_types,
     counterparties,
     counterparty_groups,
     currencies,
+    dtcm_permits,
     ejari_registrations,
     inventory_items,
     inventory_movements,
+    invoices,
     journal_entries,
+    online_accounts,
     reconciliation,
     reference_lists,
     reports,
     settings_,
+    tax_codes,
+    tenancy_contract_adjustments,
     tenancy_contracts,
     unit_spaces,
     units,
+    warnings,
 )
 
 app = FastAPI(
@@ -82,6 +91,15 @@ app.include_router(inventory_movements.router, prefix=API_PREFIX)
 app.include_router(journal_entries.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
 app.include_router(reconciliation.router, prefix=API_PREFIX)
+app.include_router(invoices.router, prefix=API_PREFIX)
+app.include_router(cash_transactions.router, prefix=API_PREFIX)
+app.include_router(tax_codes.router, prefix=API_PREFIX)
+app.include_router(asset_categories.router, prefix=API_PREFIX)
+app.include_router(cost_types.router, prefix=API_PREFIX)
+app.include_router(warnings.router, prefix=API_PREFIX)
+app.include_router(tenancy_contract_adjustments.router, prefix=API_PREFIX)
+app.include_router(online_accounts.router, prefix=API_PREFIX)
+app.include_router(dtcm_permits.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

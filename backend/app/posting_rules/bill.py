@@ -11,6 +11,10 @@ FK in this codebase (BankAccount.chart_account_id, Cheque.contra_account_id).
 
 Uses the seeded "2010 Trade payables - suppliers" liability account as the holding
 account for the unpaid balance between recording and payment.
+
+VAT (doc §5.7): when `Bill.tax_code_id` is set, `post_bill_recorded` adds
+posting_rules/tax.py's extra line(s) and grosses up the payables line for
+`standard`-treatment bills -- see that module for the full breakdown by treatment.
 """
 from datetime import date
 
@@ -18,7 +22,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.accounting import Account, BankAccount, Bill, JournalEntry, JournalEntryLine
+from app.models.foundation import TaxCode
 from app.posting_rules import new_entry
+from app.posting_rules.tax import gross_amount, vat_lines
 
 TRADE_PAYABLES_CODE = "2010"
 
@@ -29,16 +35,22 @@ def _payables_account(db: Session) -> Account | None:
 
 def post_bill_recorded(db: Session, bill: Bill) -> JournalEntry | None:
     """Bill just reached 'recorded' -- Dr the chosen expense/cost account, Cr trade
-    payables, for the bill amount (the confirmed, unpaid liability)."""
+    payables, for the bill amount (the confirmed, unpaid liability), plus any VAT
+    line(s) the bill's tax code calls for."""
     if bill.contra_account_id is None:
         return None
     payables = _payables_account(db)
     if payables is None:
         return None
 
+    tax_code = db.get(TaxCode, bill.tax_code_id) if bill.tax_code_id else None
+    payable_amount = gross_amount(tax_code, bill.amount, bill.tax_amount)
+
     entry = new_entry(db, bill.bill_date or date.today(), "bill", f"Bill {bill.bill_number} recorded")
     db.add(JournalEntryLine(journal_entry_id=entry.id, account_id=bill.contra_account_id, debit=bill.amount, credit=0))
-    db.add(JournalEntryLine(journal_entry_id=entry.id, account_id=payables.id, debit=0, credit=bill.amount))
+    db.add(JournalEntryLine(journal_entry_id=entry.id, account_id=payables.id, debit=0, credit=payable_amount))
+    for line in vat_lines(db, entry.id, tax_code, bill.tax_amount, "purchase"):
+        db.add(line)
     db.flush()
     return entry
 
@@ -55,8 +67,11 @@ def post_bill_paid(db: Session, bill: Bill) -> JournalEntry | None:
     if payables is None:
         return None
 
+    tax_code = db.get(TaxCode, bill.tax_code_id) if bill.tax_code_id else None
+    payable_amount = gross_amount(tax_code, bill.amount, bill.tax_amount)
+
     entry = new_entry(db, date.today(), "bill", f"Bill {bill.bill_number} paid")
-    db.add(JournalEntryLine(journal_entry_id=entry.id, account_id=payables.id, debit=bill.amount, credit=0))
-    db.add(JournalEntryLine(journal_entry_id=entry.id, account_id=bank_account.chart_account_id, debit=0, credit=bill.amount))
+    db.add(JournalEntryLine(journal_entry_id=entry.id, account_id=payables.id, debit=payable_amount, credit=0))
+    db.add(JournalEntryLine(journal_entry_id=entry.id, account_id=bank_account.chart_account_id, debit=0, credit=payable_amount))
     db.flush()
     return entry

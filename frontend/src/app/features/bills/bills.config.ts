@@ -1,11 +1,15 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
 import { formatAmount } from '../../shared/utils/amount';
 import { COUNTERPARTIES_CONFIG } from '../counterparties/counterparties.config';
+import { TAX_CODES_CONFIG } from '../settings/settings.config';
 
 /** Plan §3.5 `bill` (doc §6, accounts payable). Reaching `status: 'recorded'` posts
  * the liability (backend/app/posting_rules/bill.py, Dr `contra_account_id` / Cr
- * "2010 Trade payables - suppliers"); reaching `status: 'paid'` clears it against
- * `bank_account_id` -- mirrors Cheque's two-stage posting exactly. */
+ * "2010 Trade payables - suppliers"), plus any VAT line(s) its tax code calls for
+ * (posting_rules/tax.py); reaching `status: 'paid'` clears it against
+ * `bank_account_id` -- mirrors Cheque's two-stage posting exactly. `tax_amount` is
+ * entered manually (e.g. amount * tax code's rate), not server-computed, matching
+ * every other numeric field in this codebase. */
 export const BILLS_CONFIG: EntityPageConfig = {
   title: 'Bills',
   subtitle: 'Supplier and operating costs (doc Section 6). No approval workflow in v1 (confirmed dropped).',
@@ -69,6 +73,26 @@ export const BILLS_CONFIG: EntityPageConfig = {
       showInGrid: false,
     },
     { key: 'bank_account_label', label: 'Paid from', type: 'text', showInForm: false, gridWidth: 180 },
+    {
+      key: 'tax_code_id',
+      label: 'Tax code',
+      type: 'relation-select',
+      relationResourcePath: 'tax-codes',
+      relationLabelKey: 'name',
+      relationCreateFields: TAX_CODES_CONFIG.fields,
+      showInGrid: false,
+    },
+    { key: 'tax_code_label', label: 'Tax code', type: 'text', showInForm: false, gridWidth: 140 },
+    { key: 'tax_amount', label: 'Tax amount (AED)', type: 'number', gridWidth: 130, gridValueFormatter: formatAmount },
+    {
+      key: 'tenancy_contract_id',
+      label: 'Tenancy contract',
+      type: 'relation-select',
+      relationResourcePath: 'tenancy-contracts',
+      relationLabelKey: 'contract_number',
+      showInGrid: false,
+    },
+    { key: 'tenancy_contract_number', label: 'Tenancy contract', type: 'text', showInForm: false, gridWidth: 140 },
     {
       key: 'bill_document',
       label: 'Bill document',

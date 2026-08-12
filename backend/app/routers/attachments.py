@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.errors import ApiError
+from app.core.pagination import PaginationParams, apply_filters, paginate, pagination_params
 from app.models.foundation import Attachment
 from app.schemas.common import ItemResponse, ListMeta, ListResponse
 from app.schemas.foundation import AttachmentOut, AttachmentUpdate
@@ -17,14 +18,30 @@ router = APIRouter(prefix="/attachments", tags=["attachments"])
 
 
 @router.get("", response_model=ListResponse[AttachmentOut])
-def list_attachments(entity_type: str, entity_id: uuid.UUID, db: Session = Depends(get_db)):
-    stmt = (
-        select(Attachment)
-        .where(Attachment.entity_type == entity_type, Attachment.entity_id == entity_id)
-        .order_by(Attachment.created_at.desc())
-    )
-    rows = list(db.scalars(stmt).all())
-    return ListResponse(data=rows, meta=ListMeta(page=1, page_size=len(rows) or 1, total=len(rows)))
+def list_attachments(
+    entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    params: PaginationParams = Depends(pagination_params),
+):
+    """entity_type/entity_id filter to one record's files (every per-record
+    attachments panel does this). Omit both to list every attachment across every
+    module -- the Documents register (frontend/src/app/features/documents) does
+    this, reusing the same standard PaginationParams contract every other list
+    endpoint uses instead of the old unpaginated single-record dump."""
+    stmt = select(Attachment)
+    if entity_type is not None:
+        stmt = stmt.where(Attachment.entity_type == entity_type)
+    if entity_id is not None:
+        stmt = stmt.where(Attachment.entity_id == entity_id)
+    if params.q:
+        stmt = stmt.where(Attachment.document_name.ilike(f"%{params.q}%"))
+    stmt = apply_filters(stmt, Attachment, params.filter_model)
+    sort_col = getattr(Attachment, params.sort_by, None) if params.sort_by else None
+    sort_col = sort_col if sort_col is not None else Attachment.created_at
+    stmt = stmt.order_by(sort_col.desc() if params.sort_dir != "asc" else sort_col.asc())
+    rows, total = paginate(db, stmt, params)
+    return ListResponse(data=rows, meta=ListMeta(page=params.page, page_size=params.page_size, total=total))
 
 
 @router.post("", response_model=ItemResponse[AttachmentOut], status_code=201)

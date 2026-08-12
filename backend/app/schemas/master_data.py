@@ -243,6 +243,12 @@ class CounterpartyBase(BaseModel):
     roles: str | None = None
     trn: str | None = None
     emirates_id: str | None = None
+    emirates_id_issue_date: date | None = None
+    emirates_id_expiry_date: date | None = None
+    nationality: str | None = None
+    passport_number: str | None = None
+    passport_issue_date: date | None = None
+    passport_expiry_date: date | None = None
     hold_flag: bool = False
     group_id: uuid.UUID | None = None
 
@@ -258,6 +264,12 @@ class CounterpartyUpdate(BaseModel):
     roles: str | None = None
     trn: str | None = None
     emirates_id: str | None = None
+    emirates_id_issue_date: date | None = None
+    emirates_id_expiry_date: date | None = None
+    nationality: str | None = None
+    passport_number: str | None = None
+    passport_issue_date: date | None = None
+    passport_expiry_date: date | None = None
     hold_flag: bool | None = None
     group_id: uuid.UUID | None = None
 

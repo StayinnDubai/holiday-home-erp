@@ -44,3 +44,34 @@ class BalanceSheetOut(BaseModel):
     # sheet actually balances -- v1 has no period-close step that would otherwise roll
     # this into the seeded "3040 Current year result" account for real.
     current_year_result: float
+
+
+# ---------- Aged Payables (Bills have no partial-payment tracking, so "outstanding"
+# is binary -- see services/reports.py's aged_payables docstring) ----------
+class AgedPayableLine(BaseModel):
+    bill_id: uuid.UUID
+    bill_number: str
+    supplier_name: str
+    due_date: str | None
+    amount: float
+    bucket: str  # Current | 1-30 | 31-60 | 61-90 | 90+
+
+
+class AgedPayablesOut(BaseModel):
+    as_of: str
+    lines: list[AgedPayableLine]
+    bucket_totals: dict[str, float]
+    grand_total: float
+
+
+# ---------- Cheque Position (the `status` field already *is* the position) ----------
+class ChequePositionGroup(BaseModel):
+    direction: str  # received | issued
+    status: str
+    count: int
+    total_amount: float
+
+
+class ChequePositionOut(BaseModel):
+    as_of: str
+    groups: list[ChequePositionGroup]

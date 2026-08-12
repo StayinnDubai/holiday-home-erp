@@ -32,6 +32,7 @@ class TenancyContractBase(BaseModel):
     sublease_permitted: str = "no"  # yes | no
     holiday_home_permitted: str = "no"  # yes | no
     status: str = "draft"  # draft | active | expired | terminated | superseded
+    auto_calculate_rent: bool = False
 
 
 class TenancyContractCreate(TenancyContractBase):
@@ -65,6 +66,7 @@ class TenancyContractUpdate(BaseModel):
     sublease_permitted: str | None = None
     holiday_home_permitted: str | None = None
     status: str | None = None
+    auto_calculate_rent: bool | None = None
 
 
 class TenancyContractOut(BaseModel):
@@ -106,6 +108,8 @@ class TenancyContractOut(BaseModel):
     sublease_permitted: str
     holiday_home_permitted: str
     status: str
+    auto_calculate_rent: bool
+    rent_schedule_generated: bool
 
 
 # ---------- Ejari Registration ----------
@@ -213,3 +217,34 @@ class EjariRegistrationOut(EjariRegistrationBase):
     contract_number: str | None = None
     # doc §1.4 "Ejari-versus-contract variance check" -- warned, never blocked.
     variance_warnings: list[str] = Field(default_factory=list)
+
+
+# ---------- Tenancy Contract Adjustment (discount / grace period / compensation) ----------
+class TenancyContractAdjustmentBase(BaseModel):
+    contract_id: uuid.UUID
+    type: str  # discount | grace_period | compensation
+    start_date: date
+    end_date: date
+    discount_pct: float | None = None
+    amount: float | None = None
+    reason: str | None = None
+
+
+class TenancyContractAdjustmentCreate(TenancyContractAdjustmentBase):
+    pass
+
+
+class TenancyContractAdjustmentUpdate(BaseModel):
+    contract_id: uuid.UUID | None = None
+    type: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    discount_pct: float | None = None
+    amount: float | None = None
+    reason: str | None = None
+
+
+class TenancyContractAdjustmentOut(TenancyContractAdjustmentBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    contract_number: str | None = None

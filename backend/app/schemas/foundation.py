@@ -68,6 +68,88 @@ class CurrencyOut(CurrencyBase):
     id: uuid.UUID
 
 
+# ---------- Tax codes (Settings > Tax Codes, doc §5.7) ----------
+class TaxCodeBase(BaseModel):
+    code: str
+    name: str
+    rate: float = 0
+    treatment: str = "standard"  # standard | exempt | zero | reverse_charge
+    effective_from: date | None = None
+    effective_to: date | None = None
+
+
+class TaxCodeCreate(TaxCodeBase):
+    pass
+
+
+class TaxCodeUpdate(BaseModel):
+    code: str | None = None
+    name: str | None = None
+    rate: float | None = None
+    treatment: str | None = None
+    effective_from: date | None = None
+    effective_to: date | None = None
+
+
+class TaxCodeOut(TaxCodeBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+
+
+# ---------- Asset categories (Settings > Asset Categories) ----------
+class AssetCategoryBase(BaseModel):
+    code: str
+    name: str
+    useful_life_months: int | None = None
+    method: str = "linear"  # linear | reducing_balance | sum_of_years | custom
+    residual_pct: float | None = None
+    active: bool = True
+
+
+class AssetCategoryCreate(AssetCategoryBase):
+    pass
+
+
+class AssetCategoryUpdate(BaseModel):
+    code: str | None = None
+    name: str | None = None
+    useful_life_months: int | None = None
+    method: str | None = None
+    residual_pct: float | None = None
+    active: bool | None = None
+
+
+class AssetCategoryOut(AssetCategoryBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+
+
+# ---------- Cost types (Settings > Cost Categories) ----------
+class CostTypeBase(BaseModel):
+    type: str
+    subtype: str | None = None
+    direct_or_overhead: str = "direct"  # direct | overhead
+    recurring: bool = False
+    active: bool = True
+
+
+class CostTypeCreate(CostTypeBase):
+    pass
+
+
+class CostTypeUpdate(BaseModel):
+    type: str | None = None
+    subtype: str | None = None
+    direct_or_overhead: str | None = None
+    recurring: bool | None = None
+    active: bool | None = None
+
+
+class CostTypeOut(CostTypeBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+
+
 # ---------- Reference list items (doc §7.4) ----------
 class ReferenceListItemBase(BaseModel):
     list_name: str

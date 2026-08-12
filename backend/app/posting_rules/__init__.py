@@ -4,8 +4,9 @@ Convention: one function per source event, named `post_<event>(db, <record>) -> 
 Each function is called by its owning service inside the same DB transaction as the
 operational write it accounts for (see the plan's "Auto-posting" section).
 
-`cheque.py` and `bill.py` are populated. Reservations/Invoices don't exist yet, so
-their posting rules stay deferred until those modules themselves are built.
+`cheque.py`, `bill.py`, `invoice.py`, `cash_transaction.py` are populated, plus
+`tax.py` (a shared VAT-line helper, not a `post_<event>` itself). Reservations don't
+exist yet, so their posting rules stay deferred until that module is built.
 """
 from datetime import date
 

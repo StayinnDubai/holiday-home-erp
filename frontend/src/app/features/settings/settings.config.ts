@@ -118,6 +118,7 @@ export const TAX_CODES_CONFIG: EntityPageConfig = {
   title: 'Tax Codes',
   subtitle: 'Central VAT configuration (doc §5.7) -- rate, treatment, effective dates. Never hard-coded 5%.',
   resourcePath: 'tax-codes',
+  auditEntityType: 'tax_code',
   fields: [
     { key: 'code', label: 'Code', type: 'text', required: true, gridWidth: 130 },
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 200 },
@@ -169,6 +170,7 @@ export const COST_TYPES_CONFIG: EntityPageConfig = {
   title: 'Cost Types',
   subtitle: 'Direct-cost / overhead category tree (doc §7.8), e.g. DEWA → electricity. Kept flat for now; hierarchy display comes with the full module.',
   resourcePath: 'cost-types',
+  auditEntityType: 'cost_type',
   fields: [
     { key: 'type', label: 'Type', type: 'text', required: true, gridWidth: 180 },
     { key: 'subtype', label: 'Subtype', type: 'text', gridWidth: 180 },
@@ -192,6 +194,7 @@ export const ASSET_CATEGORIES_CONFIG: EntityPageConfig = {
   title: 'Asset Categories',
   subtitle: 'Depreciation policy by category (doc §7.5). v1 posting logic implements straight-line only; other methods are configurable but unused.',
   resourcePath: 'asset-categories',
+  auditEntityType: 'asset_category',
   fields: [
     { key: 'code', label: 'Code', type: 'text', required: true, gridWidth: 130 },
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 200 },

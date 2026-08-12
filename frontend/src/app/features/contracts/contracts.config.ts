@@ -153,6 +153,21 @@ export const TENANCY_CONTRACTS_CONFIG: EntityPageConfig = {
       gridWidth: 110,
     },
 
+    // ---- Lease daily calculation / ledger registration ----
+    {
+      key: 'auto_calculate_rent',
+      label: 'Auto-calculate rent (generates Bills on activation)',
+      type: 'boolean',
+      gridWidth: 150,
+    },
+    {
+      key: 'rent_schedule_generated',
+      label: 'Rent schedule generated',
+      type: 'boolean',
+      showInForm: false,
+      gridWidth: 150,
+    },
+
     // ---- Contract and addendum documents (doc §5.3 generic attachments) -- edit-view only ----
     {
       key: 'contract_documents',
@@ -247,6 +262,63 @@ export const EJARI_REGISTRATIONS_CONFIG: EntityPageConfig = {
       ],
       gridWidth: 120,
     },
+  ],
+};
+
+/** Discount / grace period / other compensation given by the landlord during a
+ * tenancy contract -- read by the backend's rent auto-calculation (§ above's
+ * `auto_calculate_rent` toggle) when computing each generated Bill's amount. A
+ * `grace_period` zeroes its date range's rent; a `discount` reduces it by
+ * `discount_pct`; a `compensation` is a flat one-time deduction. Distinct from the
+ * single grace_period_start/end_date pair on the contract itself, which stays
+ * purely documentary -- this is the operational record multiple such events get
+ * entered against. */
+export const TENANCY_CONTRACT_ADJUSTMENTS_CONFIG: EntityPageConfig = {
+  title: 'Discounts & Grace Periods',
+  subtitle: 'Discount, grace period, or other landlord compensation during a tenancy contract -- reduces the auto-calculated rent schedule.',
+  resourcePath: 'tenancy-contract-adjustments',
+  auditEntityType: 'tenancy_contract_adjustment',
+  fields: [
+    {
+      key: 'contract_id',
+      label: 'Contract',
+      type: 'relation-select',
+      required: true,
+      relationResourcePath: 'tenancy-contracts',
+      relationLabelKey: 'contract_number',
+      showInGrid: false,
+    },
+    { key: 'contract_number', label: 'Contract #', type: 'text', showInForm: false, gridWidth: 130 },
+    {
+      key: 'type',
+      label: 'Type',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Discount', value: 'discount' },
+        { label: 'Grace period', value: 'grace_period' },
+        { label: 'Compensation', value: 'compensation' },
+      ],
+      gridWidth: 130,
+    },
+    { key: 'start_date', label: 'Start date', type: 'date', required: true, gridWidth: 120 },
+    { key: 'end_date', label: 'End date', type: 'date', required: true, gridWidth: 120 },
+    {
+      key: 'discount_pct',
+      label: 'Discount %',
+      type: 'number',
+      gridWidth: 110,
+      visibleWhen: { field: 'type', equals: 'discount' },
+    },
+    {
+      key: 'amount',
+      label: 'Compensation amount (AED)',
+      type: 'number',
+      gridWidth: 170,
+      gridValueFormatter: formatAmount,
+      visibleWhen: { field: 'type', equals: 'compensation' },
+    },
+    { key: 'reason', label: 'Reason', type: 'textarea', showInGrid: false },
   ],
 };
 

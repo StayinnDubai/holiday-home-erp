@@ -3,8 +3,37 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.accounting import Account, JournalEntry, JournalEntryLine
-from app.schemas.reports import AccountBalanceLine, BalanceSheetOut, PnlOut, TrialBalanceOut
+from app.models.accounting import Account, Bill, Cheque, JournalEntry, JournalEntryLine
+from app.models.master_data import Counterparty
+from app.schemas.reports import (
+    AccountBalanceLine,
+    AgedPayableLine,
+    AgedPayablesOut,
+    BalanceSheetOut,
+    ChequePositionGroup,
+    ChequePositionOut,
+    PnlOut,
+    TrialBalanceOut,
+)
+
+# Bill statuses that represent a confirmed, unpaid liability (doc §6) -- 'draft'
+# isn't posted yet, 'paid'/'cancelled' are closed. Bills have no partial-payment
+# tracking, so every outstanding bill counts for its full gross amount.
+OUTSTANDING_BILL_STATUSES = ("recorded", "scheduled", "disputed")
+AGING_BUCKETS = ("Current", "1-30", "31-60", "61-90", "90+")
+
+
+def _aging_bucket(due_date: date | None, as_of: date) -> str:
+    if due_date is None or due_date >= as_of:
+        return "Current"
+    days_overdue = (as_of - due_date).days
+    if days_overdue <= 30:
+        return "1-30"
+    if days_overdue <= 60:
+        return "31-60"
+    if days_overdue <= 90:
+        return "61-90"
+    return "90+"
 
 
 def _account_balances(
@@ -104,3 +133,59 @@ class ReportsService:
             total_equity=round(sum(l.balance for l in equity_lines), 2),
             current_year_result=pnl.net_income,
         )
+
+    @staticmethod
+    def aged_payables(db: Session, as_of: date) -> AgedPayablesOut:
+        """Buckets each outstanding bill (see OUTSTANDING_BILL_STATUSES) by days
+        overdue from its due_date -- "outstanding" is binary since Bills have no
+        partial-payment tracking, so the full gross amount (amount + tax_amount)
+        ages as one unit."""
+        stmt = (
+            select(Bill, Counterparty.name)
+            .join(Counterparty, Counterparty.id == Bill.supplier_counterparty_id)
+            .where(Bill.is_deleted.is_(False), Bill.status.in_(OUTSTANDING_BILL_STATUSES))
+            .order_by(Bill.due_date)
+        )
+        lines: list[AgedPayableLine] = []
+        bucket_totals = {b: 0.0 for b in AGING_BUCKETS}
+        for bill, supplier_name in db.execute(stmt).all():
+            amount = round(float(bill.amount) + float(bill.tax_amount or 0), 2)
+            bucket = _aging_bucket(bill.due_date, as_of)
+            bucket_totals[bucket] = round(bucket_totals[bucket] + amount, 2)
+            lines.append(
+                AgedPayableLine(
+                    bill_id=bill.id,
+                    bill_number=bill.bill_number,
+                    supplier_name=supplier_name,
+                    due_date=bill.due_date.isoformat() if bill.due_date else None,
+                    amount=amount,
+                    bucket=bucket,
+                )
+            )
+        return AgedPayablesOut(
+            as_of=as_of.isoformat(),
+            lines=lines,
+            bucket_totals=bucket_totals,
+            grand_total=round(sum(bucket_totals.values()), 2),
+        )
+
+    @staticmethod
+    def cheque_position(db: Session, as_of: date) -> ChequePositionOut:
+        """Groups cheques by (direction, status), as of a date -- no bucketing
+        needed, the status field already *is* the position."""
+        stmt = (
+            select(
+                Cheque.direction,
+                Cheque.status,
+                func.count().label("count"),
+                func.coalesce(func.sum(Cheque.amount), 0).label("total_amount"),
+            )
+            .where(Cheque.is_deleted.is_(False), Cheque.cheque_date <= as_of)
+            .group_by(Cheque.direction, Cheque.status)
+            .order_by(Cheque.direction, Cheque.status)
+        )
+        groups = [
+            ChequePositionGroup(direction=direction, status=status, count=count, total_amount=round(float(total_amount), 2))
+            for direction, status, count, total_amount in db.execute(stmt).all()
+        ]
+        return ChequePositionOut(as_of=as_of.isoformat(), groups=groups)

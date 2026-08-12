@@ -180,6 +180,12 @@ class Counterparty(AuditableRecord, Base):
     roles: Mapped[str | None] = mapped_column(String(255))
     trn: Mapped[str | None] = mapped_column(String(50))
     emirates_id: Mapped[str | None] = mapped_column(String(50))
+    emirates_id_issue_date: Mapped[date | None] = mapped_column(Date)
+    emirates_id_expiry_date: Mapped[date | None] = mapped_column(Date)
+    nationality: Mapped[str | None] = mapped_column(String(100))
+    passport_number: Mapped[str | None] = mapped_column(String(50))
+    passport_issue_date: Mapped[date | None] = mapped_column(Date)
+    passport_expiry_date: Mapped[date | None] = mapped_column(Date)
     hold_flag: Mapped[bool] = mapped_column(default=False)
     group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("counterparty_group.id"))
 

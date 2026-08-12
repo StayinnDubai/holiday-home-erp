@@ -10,7 +10,7 @@ something once there's a cheque ledger to post it to) -- see doc §1.4 "Function
 import uuid
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import AuditableRecord, Base
@@ -64,6 +64,16 @@ class TenancyContract(AuditableRecord, Base):
     holiday_home_permitted: Mapped[str] = mapped_column(String(10), default="no")  # yes | no
 
     status: Mapped[str] = mapped_column(String(20), default="draft")  # draft|active|expired|terminated|superseded
+
+    # Lease daily calculation / ledger registration. When True, activating this
+    # contract (status -> 'active') generates a schedule of draft Bills against the
+    # landlord (services/rent_schedule.py) -- daily_rate = total_annual_rent / 365,
+    # split into `instalment_count` periods, reduced by any TenancyContractAdjustment
+    # rows. `rent_schedule_generated` guards it from firing twice -- the term is
+    # locked once active (LOCKED_FIELDS_WHEN_ACTIVE below) so a schedule computed at
+    # activation stays valid for the life of the contract.
+    auto_calculate_rent: Mapped[bool] = mapped_column(Boolean, default=False)
+    rent_schedule_generated: Mapped[bool] = mapped_column(Boolean, default=False)
 
     renewal_of: Mapped["TenancyContract | None"] = relationship(remote_side="TenancyContract.id")
     parties: Mapped[list["TenancyContractParty"]] = relationship(
@@ -149,5 +159,28 @@ class EjariRegistration(AuditableRecord, Base):
     size: Mapped[float | None] = mapped_column(Numeric(10, 2, asdecimal=False))
 
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | expired | superseded
+
+    contract: Mapped[TenancyContract] = relationship()
+
+
+class TenancyContractAdjustment(AuditableRecord, Base):
+    """Discount / grace period / other compensation given by the landlord during a
+    tenancy contract -- read by services/rent_schedule.py when computing each
+    generated Bill's amount (a `grace_period` zeroes its overlapping days, a
+    `discount` reduces them by `discount_pct`, a `compensation` is a flat one-time
+    deduction from the period containing `start_date`). Distinct from the single
+    `grace_period_start_date`/`end_date` pair on TenancyContract itself, which stays
+    purely documentary (the contract's own stated terms) -- this table is the
+    operational record multiple such events actually get entered against."""
+
+    __tablename__ = "tenancy_contract_adjustment"
+
+    contract_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenancy_contract.id"), nullable=False)
+    type: Mapped[str] = mapped_column(String(20))  # discount | grace_period | compensation
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    discount_pct: Mapped[float | None] = mapped_column(Numeric(5, 2, asdecimal=False))
+    amount: Mapped[float | None] = mapped_column(Numeric(14, 2, asdecimal=False))
+    reason: Mapped[str | None] = mapped_column(Text)
 
     contract: Mapped[TenancyContract] = relationship()
