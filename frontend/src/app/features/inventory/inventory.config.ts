@@ -1,4 +1,5 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { formatAmount } from '../../shared/utils/amount';
 import { COUNTERPARTIES_CONFIG } from '../counterparties/counterparties.config';
 
 /** doc §2.5 "item master" -- consumables and linen/amenity stock. `stock_tracked`
@@ -14,6 +15,7 @@ export const INVENTORY_ITEMS_CONFIG: EntityPageConfig = {
   title: 'Inventory Items',
   subtitle: 'Item master (doc §2.5) -- consumables, linen and amenities. Stock-tracked items carry a running balance; others are expensed on purchase.',
   resourcePath: 'inventory-items',
+  auditEntityType: 'inventory_item',
   fields: [
     { key: 'code', label: 'Code', type: 'text', required: true, gridWidth: 110 },
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 220 },
@@ -32,8 +34,8 @@ export const INVENTORY_ITEMS_CONFIG: EntityPageConfig = {
     },
     { key: 'default_supplier_name', label: 'Default supplier', type: 'text', showInForm: false, gridWidth: 170 },
     { key: 'quantity_on_hand', label: 'Qty on hand', type: 'number', showInForm: false, gridWidth: 120, sortable: false },
-    { key: 'weighted_average_cost', label: 'Weighted avg. cost (AED)', type: 'number', showInForm: false, gridWidth: 170, sortable: false },
-    { key: 'total_value', label: 'Total value (AED)', type: 'number', showInForm: false, gridWidth: 150, sortable: false },
+    { key: 'weighted_average_cost', label: 'Weighted avg. cost (AED)', type: 'number', showInForm: false, gridWidth: 170, sortable: false, gridValueFormatter: formatAmount },
+    { key: 'total_value', label: 'Total value (AED)', type: 'number', showInForm: false, gridWidth: 150, sortable: false, gridValueFormatter: formatAmount },
     { key: 'notes', label: 'Notes', type: 'textarea', showInGrid: false },
     { key: 'active', label: 'Active', type: 'boolean', gridWidth: 90 },
   ],
@@ -54,6 +56,7 @@ export const INVENTORY_MOVEMENTS_CONFIG: EntityPageConfig = {
   title: 'Inventory Movements',
   subtitle: 'Receipts, issues, transfers, wastage and stock-count adjustments (doc §2.5) -- the ledger behind each item’s balance.',
   resourcePath: 'inventory-movements',
+  auditEntityType: 'inventory_movement',
   fields: [
     {
       key: 'item_id',

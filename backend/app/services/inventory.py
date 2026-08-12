@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
-from app.core.pagination import PaginationParams, paginate
+from app.core.pagination import PaginationParams, apply_filters, paginate
 from app.models.inventory import InventoryItem, InventoryMovement
 from app.models.master_data import Counterparty
 from app.schemas.inventory import (
@@ -31,8 +31,18 @@ class InventoryItemService:
         stmt = select(InventoryItem).where(InventoryItem.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(InventoryItem.name.ilike(f"%{params.q}%") | InventoryItem.code.ilike(f"%{params.q}%"))
-        if params.sort_by == "default_supplier_name":
+        needs_supplier_join = params.sort_by == "default_supplier_name" or "default_supplier_name" in (
+            params.filter_model or {}
+        )
+        if needs_supplier_join:
             stmt = stmt.outerjoin(Counterparty, Counterparty.id == InventoryItem.default_supplier_id)
+        stmt = apply_filters(
+            stmt,
+            InventoryItem,
+            params.filter_model,
+            extra_columns={"default_supplier_name": Counterparty.name} if needs_supplier_join else None,
+        )
+        if params.sort_by == "default_supplier_name":
             col = Counterparty.name
         else:
             col = _sort_col(InventoryItem, params.sort_by, InventoryItem.code)
@@ -178,11 +188,22 @@ class InventoryMovementService:
             stmt = stmt.where(InventoryMovement.item_id == item_id)
         if params.q:
             stmt = stmt.where(InventoryMovement.reference.ilike(f"%{params.q}%"))
-        if params.sort_by in ("item_code", "item_name"):
+        filter_keys = (params.filter_model or {}).keys()
+        needs_item_join = params.sort_by in ("item_code", "item_name") or filter_keys & {"item_code", "item_name"}
+        needs_supplier_join = params.sort_by == "supplier_name" or "supplier_name" in filter_keys
+        if needs_item_join:
             stmt = stmt.join(InventoryItem, InventoryItem.id == InventoryMovement.item_id)
+        if needs_supplier_join:
+            stmt = stmt.outerjoin(Counterparty, Counterparty.id == InventoryMovement.supplier_id)
+        extra_columns = {}
+        if needs_item_join:
+            extra_columns.update({"item_code": InventoryItem.code, "item_name": InventoryItem.name})
+        if needs_supplier_join:
+            extra_columns["supplier_name"] = Counterparty.name
+        stmt = apply_filters(stmt, InventoryMovement, params.filter_model, extra_columns=extra_columns or None)
+        if params.sort_by in ("item_code", "item_name"):
             col = InventoryItem.code if params.sort_by == "item_code" else InventoryItem.name
         elif params.sort_by == "supplier_name":
-            stmt = stmt.outerjoin(Counterparty, Counterparty.id == InventoryMovement.supplier_id)
             col = Counterparty.name
         else:
             col = _sort_col(InventoryMovement, params.sort_by, InventoryMovement.date)

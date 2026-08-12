@@ -7,12 +7,16 @@ import { ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
 import { SelectModule } from 'primeng/select';
-import { map } from 'rxjs';
+import { forkJoin, map } from 'rxjs';
 import { CrudApiService } from '../../core/api/crud-api.service';
 import { ListQuery } from '../../core/models/api.model';
+import { MatchSuggestion, ReconciliationApiService } from '../../core/api/reconciliation-api.service';
 import { AgGridTableComponent } from '../../shared/ag-grid/ag-grid-table.component';
+import { formatAmount } from '../../shared/utils/amount';
+import { AuditHistoryComponent } from '../../shared/crud/audit-history.component';
 import { EntityFieldConfig, FieldType } from '../../shared/crud/entity-page-config.model';
 import { EntityFormComponent } from '../../shared/crud/entity-form.component';
+import { filterTypeFor } from '../../shared/crud/grid-filter-type';
 import { RowActionsCellRendererComponent, RowActionsContext } from '../../shared/crud/row-actions-cell-renderer.component';
 
 interface BankAccountOption {
@@ -65,6 +69,7 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
     SelectModule,
     AgGridTableComponent,
     EntityFormComponent,
+    AuditHistoryComponent,
   ],
   providers: [ConfirmationService],
   template: `
@@ -83,6 +88,14 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
             optionValue="value"
             placeholder="Select a bank account"
             [style]="{ width: '18rem' }"
+          />
+          <p-button
+            label="Suggest matches"
+            icon="pi pi-sync"
+            severity="secondary"
+            [outlined]="true"
+            (onClick)="openSuggestMatches()"
+            [disabled]="!selectedAccountId"
           />
           <p-button
             label="Add new"
@@ -105,12 +118,15 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
           [columnDefs]="columnDefs"
           [fetchPage]="fetchPage"
           [context]="gridContext"
+          [stateKey]="'bank-statement-original:' + selectedAccountId"
+          (rowView)="openView($event)"
+          (bulkDelete)="onBulkDelete($event)"
         />
       </div>
     </div>
 
     <p-dialog
-      [header]="editing() ? 'Edit statement line' : 'Add statement line'"
+      [header]="dialogHeader()"
       [(visible)]="dialogVisible"
       [modal]="true"
       [dismissableMask]="true"
@@ -120,12 +136,56 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
         *ngIf="dialogVisible"
         [fields]="formFields"
         [model]="editing()"
+        [readonly]="viewing()"
         (save)="onSave($event)"
         (cancel)="dialogVisible = false"
       />
+      <app-audit-history *ngIf="dialogVisible && viewing() && editing() as row" entityType="bank_statement_entry" [entityId]="row.id" />
     </p-dialog>
 
     <p-confirmDialog [style]="{ width: '26rem' }" icon="pi pi-exclamation-triangle" />
+
+    <p-dialog
+      header="Suggested matches"
+      [(visible)]="matchDialogVisible"
+      [modal]="true"
+      [dismissableMask]="true"
+      [style]="{ width: '42rem' }"
+    >
+      <p class="panel__hint" *ngIf="matchLoading">Looking for matches...</p>
+      <p class="panel__hint" *ngIf="!matchLoading && !matchConfigured">
+        This account's Original columns aren't tagged for matching yet -- set an "Amount" and "Date" role under
+        Settings &gt; Bank Account Columns first.
+      </p>
+      <p class="panel__hint" *ngIf="!matchLoading && matchConfigured && matchSuggestions.length === 0">
+        No matches found -- either every open cheque is already matched, or none line up closely enough.
+      </p>
+      <table class="match-table" *ngIf="!matchLoading && matchSuggestions.length > 0">
+        <thead>
+          <tr>
+            <th>Cheque</th>
+            <th class="match-table__num">Amount</th>
+            <th>Cheque date</th>
+            <th>Statement date</th>
+            <th class="match-table__num">Diff (days)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of matchSuggestions">
+            <td>{{ s.cheque_number }}</td>
+            <td class="match-table__num">{{ formatAmount(s.cheque_amount) }}</td>
+            <td>{{ s.cheque_date }}</td>
+            <td>{{ s.entry_date }}</td>
+            <td class="match-table__num">{{ s.day_difference }}</td>
+            <td class="match-table__actions">
+              <p-button label="Confirm" size="small" (onClick)="confirmMatch(s)" />
+              <p-button label="Skip" size="small" severity="secondary" [text]="true" (onClick)="skipMatch(s)" />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </p-dialog>
   `,
   styles: [
     `
@@ -179,6 +239,34 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
         color: #64748b;
         font-size: 0.9rem;
       }
+      .match-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+      }
+      .match-table th {
+        text-align: left;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #64748b;
+        border-bottom: 2px solid #e2e8f0;
+        padding: 0.5rem 0.6rem;
+      }
+      .match-table td {
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid #f1f5f9;
+        color: #0f172a;
+      }
+      .match-table__num {
+        text-align: right;
+        white-space: nowrap;
+      }
+      .match-table__actions {
+        display: flex;
+        gap: 0.4rem;
+        justify-content: flex-end;
+      }
     `,
   ],
 })
@@ -193,8 +281,16 @@ export class BankStatementOriginalComponent implements OnInit {
 
   dialogVisible = false;
   editing = signal<Row | null>(null);
+  viewing = signal(false);
+
+  matchDialogVisible = false;
+  matchLoading = false;
+  matchConfigured = true;
+  matchSuggestions: MatchSuggestion[] = [];
+  formatAmount = formatAmount;
 
   readonly gridContext: RowActionsContext<Row> = {
+    onView: (row) => this.openView(row),
     onEdit: (row) => this.openEdit(row),
     onDelete: (row) => this.confirmDelete(row),
   };
@@ -208,7 +304,11 @@ export class BankStatementOriginalComponent implements OnInit {
       )
       .pipe(map((res) => ({ ...res, data: res.data.map((row) => ({ ...row, ...row.values })) })));
 
-  constructor(private readonly api: CrudApiService, private readonly confirmationService: ConfirmationService) {}
+  constructor(
+    private readonly api: CrudApiService,
+    private readonly reconciliationApi: ReconciliationApiService,
+    private readonly confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     this.api.list<BankAccountOption>('bank-accounts', { page: 1, page_size: 200 }).subscribe({
@@ -255,11 +355,21 @@ export class BankStatementOriginalComponent implements OnInit {
           );
           this.columnDefs = [
             ...this.formFields.map(
-              (f): ColDef => ({ field: f.key, headerName: f.label, minWidth: f.gridWidth ?? 140, flex: 1 })
+              (f): ColDef => ({
+                field: f.key,
+                headerName: f.label,
+                minWidth: f.gridWidth ?? 140,
+                flex: 1,
+                filter: filterTypeFor(f),
+                // Every dynamic column here is a bank-statement figure (amount, balance,
+                // debit, credit, ...) -- comma-group it like any other accounting number.
+                valueFormatter: f.type === 'number' ? (p) => formatAmount(p.value) : undefined,
+              })
             ),
             {
               headerName: 'Actions',
-              width: 110,
+              width: 150,
+              pinned: 'right',
               sortable: false,
               filter: false,
               resizable: false,
@@ -272,13 +382,26 @@ export class BankStatementOriginalComponent implements OnInit {
       });
   }
 
+  dialogHeader(): string {
+    if (this.viewing()) return 'View statement line';
+    return this.editing() ? 'Edit statement line' : 'Add statement line';
+  }
+
   openCreate(): void {
     this.editing.set(null);
+    this.viewing.set(false);
+    this.dialogVisible = true;
+  }
+
+  openView(row: Row): void {
+    this.editing.set(row);
+    this.viewing.set(true);
     this.dialogVisible = true;
   }
 
   openEdit(row: Row): void {
     this.editing.set(row);
+    this.viewing.set(false);
     this.dialogVisible = true;
   }
 
@@ -311,6 +434,63 @@ export class BankStatementOriginalComponent implements OnInit {
   private onDelete(row: Row): void {
     this.api.remove('bank-statement-entries', row.id).subscribe({
       next: () => this.grid?.refresh(),
+    });
+  }
+
+  openSuggestMatches(): void {
+    if (!this.selectedAccountId) return;
+    this.matchDialogVisible = true;
+    this.matchLoading = true;
+    this.reconciliationApi.matchSuggestions(this.selectedAccountId).subscribe({
+      next: (res) => {
+        this.matchConfigured = res.configured;
+        this.matchSuggestions = res.suggestions;
+        this.matchLoading = false;
+      },
+      error: () => {
+        this.matchLoading = false;
+      },
+    });
+  }
+
+  confirmMatch(s: MatchSuggestion): void {
+    this.api
+      .update('cheques', s.cheque_id, {
+        status: 'cleared',
+        actual_drawdown_date: s.entry_date,
+        drawdown_source: 'bank_reconciliation',
+        matched_bank_statement_entry_id: s.bank_statement_entry_id,
+      })
+      .subscribe({
+        next: () => {
+          this.matchSuggestions = this.matchSuggestions.filter((x) => x.cheque_id !== s.cheque_id);
+        },
+      });
+  }
+
+  skipMatch(s: MatchSuggestion): void {
+    this.matchSuggestions = this.matchSuggestions.filter((x) => x.cheque_id !== s.cheque_id);
+  }
+
+  onBulkDelete(rows: Row[]): void {
+    if (rows.length === 0) return;
+    this.confirmationService.confirm({
+      header: `Delete ${rows.length} statement lines`,
+      message: `Are you sure you want to delete ${rows.length} selected line(s)? This cannot be undone.`,
+      acceptButtonProps: { label: 'Delete', severity: 'danger' },
+      rejectButtonProps: { label: 'Cancel', severity: 'secondary', text: true },
+      accept: () => {
+        forkJoin(rows.map((row) => this.api.remove('bank-statement-entries', row.id))).subscribe({
+          next: () => {
+            this.grid?.refresh();
+            this.grid?.clearSelection();
+          },
+          error: () => {
+            this.grid?.refresh();
+            this.grid?.clearSelection();
+          },
+        });
+      },
     });
   }
 }

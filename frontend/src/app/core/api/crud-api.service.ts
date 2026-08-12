@@ -19,6 +19,7 @@ export class CrudApiService {
     if (query.sort_by) params = params.set('sort_by', query.sort_by);
     if (query.sort_dir) params = params.set('sort_dir', query.sort_dir);
     if (query.q) params = params.set('q', query.q);
+    if (query.filter_model) params = params.set('filter_model', query.filter_model);
     for (const [key, value] of Object.entries(extraParams)) {
       params = params.set(key, value);
     }

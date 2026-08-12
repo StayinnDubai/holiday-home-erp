@@ -2,8 +2,31 @@
 
 Convention: one function per source event, named `post_<event>(db, <record>) -> JournalEntry`.
 Each function is called by its owning service inside the same DB transaction as the
-operational write it accounts for (see app/services/README or the plan §4 "Auto-posting").
+operational write it accounts for (see the plan's "Auto-posting" section).
 
-Empty in the Foundation milestone — populated starting with the Accounting-core milestone,
-once Bills/Reservations/Cheques exist to post from.
+`cheque.py` and `bill.py` are populated. Reservations/Invoices don't exist yet, so
+their posting rules stay deferred until those modules themselves are built.
 """
+from datetime import date
+
+from sqlalchemy.orm import Session
+
+from app.models.accounting import JournalEntry
+from app.services.numbering import NumberingService
+
+
+def new_entry(db: Session, entry_date: date, source_module: str, memo: str) -> JournalEntry:
+    """Shared by every posting_rules/*.py module -- one JournalEntry header, always
+    created 'posted' directly (these are all confirmed real-world events by the time
+    a posting rule fires, unlike a manually-drafted entry)."""
+    entry = JournalEntry(
+        number=NumberingService.next(db, "journal_entry"),
+        date=entry_date,
+        period=entry_date.strftime("%Y-%m"),
+        status="posted",
+        source_module=source_module,
+        memo=memo,
+    )
+    db.add(entry)
+    db.flush()
+    return entry

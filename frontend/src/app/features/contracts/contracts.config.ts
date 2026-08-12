@@ -1,4 +1,5 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { formatAmount } from '../../shared/utils/amount';
 import { UNITS_CONFIG } from '../units/units.config';
 import { COUNTERPARTIES_CONFIG } from '../counterparties/counterparties.config';
 
@@ -20,6 +21,7 @@ export const TENANCY_CONTRACTS_CONFIG: EntityPageConfig = {
   title: 'Tenancy Contracts',
   subtitle: 'Inbound lease, company ← landlord (doc §1.4). One unit per contract. Ejari registration is its own page once a contract exists.',
   resourcePath: 'tenancy-contracts',
+  auditEntityType: 'tenancy_contract',
   fields: [
     { key: 'contract_number', label: 'Contract #', type: 'text', showInForm: false, gridWidth: 130 },
     {
@@ -76,7 +78,7 @@ export const TENANCY_CONTRACTS_CONFIG: EntityPageConfig = {
     { key: 'contract_date', label: 'Contract date', type: 'date', showInGrid: false },
     { key: 'start_date', label: 'Start date', type: 'date', required: true, gridWidth: 120 },
     { key: 'end_date', label: 'End date', type: 'date', required: true, gridWidth: 120 },
-    { key: 'total_annual_rent', label: 'Annual rent (AED)', type: 'number', required: true, gridWidth: 150 },
+    { key: 'total_annual_rent', label: 'Annual rent (AED)', type: 'number', required: true, gridWidth: 150, gridValueFormatter: formatAmount },
     {
       key: 'instalment_count',
       label: 'Instalments',
@@ -170,6 +172,7 @@ export const EJARI_REGISTRATIONS_CONFIG: EntityPageConfig = {
   title: 'Ejari Registrations',
   subtitle: 'Certificate as registered (doc §1.4) — verbatim, even where it diverges from the contract. Divergence is warned, never blocked.',
   resourcePath: 'ejari-registrations',
+  auditEntityType: 'ejari_registration',
   fields: [
     {
       key: 'contract_id',
@@ -204,7 +207,7 @@ export const EJARI_REGISTRATIONS_CONFIG: EntityPageConfig = {
     { key: 'contract_amount', label: 'Contract amount', type: 'number', showInGrid: false },
     { key: 'annual_amount', label: 'Annual amount', type: 'number', showInGrid: false },
     { key: 'actual_contract_amount', label: 'Actual contract amount', type: 'number', showInGrid: false },
-    { key: 'actual_annual_amount', label: 'Actual annual amount (AED)', type: 'number', gridWidth: 170 },
+    { key: 'actual_annual_amount', label: 'Actual annual amount (AED)', type: 'number', gridWidth: 170, gridValueFormatter: formatAmount },
     { key: 'discount', label: 'Discount', type: 'number', showInGrid: false },
     { key: 'security_deposit', label: 'Security deposit', type: 'number', showInGrid: false },
 
@@ -268,8 +271,8 @@ export const RENTAL_AGREEMENTS_CONFIG: EntityPageConfig = {
     },
     { key: 'start_date', label: 'Start date', type: 'date' },
     { key: 'end_date', label: 'End date', type: 'date' },
-    { key: 'annual_rent', label: 'Annual rent (AED)', type: 'number' },
-    { key: 'security_deposit_amount', label: 'Security deposit (AED)', type: 'number' },
+    { key: 'annual_rent', label: 'Annual rent (AED)', type: 'number', gridValueFormatter: formatAmount },
+    { key: 'security_deposit_amount', label: 'Security deposit (AED)', type: 'number', gridValueFormatter: formatAmount },
     {
       key: 'status',
       label: 'Status',

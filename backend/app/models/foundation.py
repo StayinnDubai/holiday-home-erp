@@ -5,7 +5,7 @@ every other module. No app_user / auth tables here yet (deferred, plan §7).
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -63,6 +63,13 @@ class Currency(AuditableRecord, Base):
     code: Mapped[str] = mapped_column(String(3), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(10))
     full_name: Mapped[str] = mapped_column(String(100))
+    # Spot rate to the company's base currency (Entity.base_currency_id) -- current
+    # value only, no rate history (nothing in this codebase has a time-series
+    # pattern to mirror yet). Null means "not configured," not "1.0" -- stays honest
+    # about incompleteness rather than silently assuming parity. Display/foundation
+    # only in v1: JournalEntryLine has no currency field, so the GL itself stays
+    # single-currency -- this doesn't retrofit conversion into postings/reports.
+    rate_to_base: Mapped[float | None] = mapped_column(Numeric(18, 6, asdecimal=False))
 
 
 class AuditLog(IdMixin, Base):

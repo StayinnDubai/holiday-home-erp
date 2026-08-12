@@ -1,4 +1,5 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { formatAmount } from '../../shared/utils/amount';
 
 /** Plan §3.4 `reservation` -- header fields; folio lines are a detail tab later.
  * Calendar view (doc §5.1) is a different UI paradigm, added separately -- this is the
@@ -24,8 +25,8 @@ export const RESERVATIONS_CONFIG: EntityPageConfig = {
     { key: 'guest_id', label: 'Guest ID', type: 'text' },
     { key: 'check_in', label: 'Check-in', type: 'date', required: true },
     { key: 'check_out', label: 'Check-out', type: 'date', required: true },
-    { key: 'gross_amount', label: 'Gross amount (AED)', type: 'number' },
-    { key: 'net_amount', label: 'Net amount (AED)', type: 'number' },
+    { key: 'gross_amount', label: 'Gross amount (AED)', type: 'number', gridValueFormatter: formatAmount },
+    { key: 'net_amount', label: 'Net amount (AED)', type: 'number', gridValueFormatter: formatAmount },
     {
       key: 'status',
       label: 'Status',

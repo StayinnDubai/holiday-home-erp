@@ -1,4 +1,5 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { formatAmount } from '../../shared/utils/amount';
 
 /** Plan §3.3 `dtcm_permit`. */
 export const DTCM_PERMITS_CONFIG: EntityPageConfig = {
@@ -10,7 +11,7 @@ export const DTCM_PERMITS_CONFIG: EntityPageConfig = {
     { key: 'unit_id', label: 'Unit ID', type: 'text', required: true },
     { key: 'issue_date', label: 'Issue date', type: 'date' },
     { key: 'expiry_date', label: 'Expiry date', type: 'date' },
-    { key: 'fee', label: 'Fee (AED)', type: 'number' },
+    { key: 'fee', label: 'Fee (AED)', type: 'number', gridValueFormatter: formatAmount },
     { key: 'bedrooms_permitted', label: 'Bedrooms permitted', type: 'number', gridWidth: 150 },
     { key: 'max_guests', label: 'Max guests', type: 'number', gridWidth: 120 },
     {

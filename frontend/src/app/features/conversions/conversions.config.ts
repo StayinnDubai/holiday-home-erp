@@ -1,4 +1,5 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { formatAmount } from '../../shared/utils/amount';
 
 /** Plan §3.3 `product_line_conversion` (doc §1.9) -- checklist detail per step is a
  * dedicated workflow screen once this milestone is built; this is the header record. */
@@ -21,6 +22,6 @@ export const CONVERSIONS_CONFIG: EntityPageConfig = {
     { key: 'started_at', label: 'Started', type: 'date' },
     { key: 'completed_at', label: 'Completed', type: 'date' },
     { key: 'idle_days', label: 'Idle days', type: 'number', gridWidth: 110 },
-    { key: 'total_cost', label: 'Total cost (AED)', type: 'number' },
+    { key: 'total_cost', label: 'Total cost (AED)', type: 'number', gridValueFormatter: formatAmount },
   ],
 };

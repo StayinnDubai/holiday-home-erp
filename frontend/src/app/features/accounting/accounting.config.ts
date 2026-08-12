@@ -1,4 +1,5 @@
 import { EntityPageConfig } from '../../shared/crud/entity-page-config.model';
+import { formatAmount } from '../../shared/utils/amount';
 import { COUNTERPARTIES_CONFIG } from '../counterparties/counterparties.config';
 import { CURRENCIES_CONFIG } from '../settings/settings.config';
 
@@ -13,6 +14,7 @@ export const CHART_OF_ACCOUNTS_CONFIG: EntityPageConfig = {
   title: 'Chart of Accounts',
   subtitle: 'Appendix A, 108 accounts (doc §2.0) -- four-digit, grouped by type, with room to insert.',
   resourcePath: 'accounts',
+  auditEntityType: 'account',
   fields: [
     { key: 'code', label: 'Code', type: 'text', required: true, gridWidth: 100 },
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 300 },
@@ -58,16 +60,22 @@ export const CHART_OF_ACCOUNTS_CONFIG: EntityPageConfig = {
   ],
 };
 
-/** Plan §3.5 `journal_entry`. Multi-line journal entry editing (debit/credit lines with
- * dimensions) is a dedicated screen once Accounting-core is built -- this is the header. */
+/** Plan §3.5 `journal_entry`. Only `status: 'posted'` entries count toward account
+ * balances / Financial Reports (backend/app/services/reports.py) -- draft/submitted/
+ * approved are visible but inert. Once posted, an entry (including its lines) is
+ * immutable server-side -- corrections are a new reversing entry, not an edit.
+ * `number`/`period` are server-generated (NumberingService / derived from `date`),
+ * `source_module` defaults to 'manual' for anything created here -- 'cheque' entries
+ * come from posting_rules/cheque.py instead, not this form. */
 export const JOURNAL_ENTRIES_CONFIG: EntityPageConfig = {
   title: 'Journal Entries',
-  subtitle: 'Header record. Multi-line debit/credit entry with dimensions is a dedicated screen once Accounting-core is built.',
+  subtitle: 'General ledger. Draft/submitted/approved entries are inert -- only posted entries move a balance.',
   resourcePath: 'journal-entries',
+  auditEntityType: 'journal_entry',
   fields: [
-    { key: 'number', label: 'Journal number', type: 'text', gridWidth: 150 },
+    { key: 'number', label: 'Journal number', type: 'text', gridWidth: 150, showInForm: false },
     { key: 'date', label: 'Date', type: 'date', required: true },
-    { key: 'period', label: 'Period', type: 'text', gridWidth: 110 },
+    { key: 'period', label: 'Period', type: 'text', gridWidth: 110, showInForm: false },
     {
       key: 'status',
       label: 'Status',
@@ -81,8 +89,9 @@ export const JOURNAL_ENTRIES_CONFIG: EntityPageConfig = {
         { label: 'Reversed', value: 'reversed' },
       ],
     },
-    { key: 'source_module', label: 'Source module', type: 'text' },
+    { key: 'source_module', label: 'Source module', type: 'text', showInForm: false },
     { key: 'memo', label: 'Memo', type: 'textarea', showInGrid: false },
+    { key: 'lines', label: 'Lines', type: 'journal-entry-lines', showInGrid: false },
   ],
 };
 
@@ -102,6 +111,7 @@ export const CHEQUE_LEDGER_CONFIG: EntityPageConfig = {
   title: 'Cheque Ledger',
   subtitle: 'Post-dated cheques (doc §2.1) -- ~50/month. "Held as security" is a distinct status from on-hand payment cheques.',
   resourcePath: 'cheques',
+  auditEntityType: 'cheque',
   fields: [
     { key: 'cheque_number', label: 'Cheque number', type: 'text', required: true, gridWidth: 150 },
     {
@@ -126,8 +136,8 @@ export const CHEQUE_LEDGER_CONFIG: EntityPageConfig = {
       showInGrid: false,
     },
     { key: 'counterparty_name', label: 'Counterparty', type: 'text', showInForm: false, gridWidth: 180 },
-    { key: 'payee_name', label: 'Payee (as written)', type: 'text', showInGrid: false },
-    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridWidth: 130 },
+    { key: 'payee_name', label: 'Payee (as written)', type: 'text', gridWidth: 180 },
+    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridWidth: 130, gridValueFormatter: formatAmount },
     { key: 'cheque_date', label: 'Cheque date', type: 'date', gridWidth: 120 },
     {
       key: 'actual_drawdown_date',
@@ -163,6 +173,24 @@ export const CHEQUE_LEDGER_CONFIG: EntityPageConfig = {
       gridWidth: 140,
     },
     {
+      key: 'contra_account_id',
+      label: 'Settles (GL account)',
+      type: 'relation-select',
+      relationResourcePath: 'accounts',
+      relationLabelKey: 'code',
+      showInGrid: false,
+    },
+    { key: 'contra_account_code', label: 'Settles', type: 'text', showInForm: false, gridWidth: 110 },
+    {
+      key: 'bank_account_id',
+      label: 'Clears through (bank account)',
+      type: 'relation-select',
+      relationResourcePath: 'bank-accounts',
+      relationLabelKey: 'account_name',
+      showInGrid: false,
+    },
+    { key: 'bank_account_label', label: 'Clears through', type: 'text', showInForm: false, gridWidth: 180 },
+    {
       key: 'cheque_image',
       label: 'Cheque image',
       type: 'attachments',
@@ -180,6 +208,7 @@ export const BANK_ACCOUNTS_CONFIG: EntityPageConfig = {
   title: 'Bank Accounts',
   subtitle: "The company's own bank accounts. Unique code is entered manually (3 digits).",
   resourcePath: 'bank-accounts',
+  auditEntityType: 'bank_account',
   fields: [
     { key: 'code', label: 'Unique code', type: 'text', required: true, gridWidth: 110 },
     {
@@ -242,7 +271,7 @@ export const CASH_LEDGER_CONFIG: EntityPageConfig = {
     { key: 'date', label: 'Date', type: 'date', required: true },
     { key: 'custodian_user_id', label: 'Custodian', type: 'text' },
     { key: 'location', label: 'Location', type: 'text' },
-    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true },
+    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridValueFormatter: formatAmount },
     { key: 'category', label: 'Category', type: 'text' },
     { key: 'counterparty_id', label: 'Counterparty ID', type: 'text' },
     { key: 'reference', label: 'Reference', type: 'text' },
@@ -269,7 +298,7 @@ export const INVOICES_CONFIG: EntityPageConfig = {
     { key: 'counterparty_id', label: 'Counterparty ID', type: 'text', required: true },
     { key: 'date', label: 'Date', type: 'date' },
     { key: 'due_date', label: 'Due date', type: 'date' },
-    { key: 'total_amount', label: 'Total (AED)', type: 'number' },
+    { key: 'total_amount', label: 'Total (AED)', type: 'number', gridValueFormatter: formatAmount },
     {
       key: 'status',
       label: 'Status',

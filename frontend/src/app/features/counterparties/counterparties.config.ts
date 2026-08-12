@@ -44,5 +44,8 @@ export const COUNTERPARTIES_CONFIG: EntityPageConfig = {
   title: 'Counterparties',
   subtitle: 'Single master for landlord/tenant/supplier/agent/OTA (doc §2.6). All counterparties, regardless of group.',
   resourcePath: 'counterparties',
-  fields: COUNTERPARTY_BASE_FIELDS,
+  auditEntityType: 'counterparty',
+  // Unlike Landlords (landlords.config.ts), this grid/form drops "Roles" -- not
+  // useful once the list isn't already scoped to one role (landlord).
+  fields: COUNTERPARTY_BASE_FIELDS.filter((f) => f.key !== 'roles'),
 };

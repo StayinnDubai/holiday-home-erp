@@ -12,8 +12,10 @@ import { PrimeTemplate } from 'primeng/api';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { CrudApiService } from '../../core/api/crud-api.service';
+import { fromLocalDateString, toLocalDateString } from '../utils/date';
 import { AttachmentsFieldComponent } from './attachments-field.component';
 import { AttachmentsListComponent } from './attachments-list.component';
+import { JournalEntryLinesFieldComponent } from './journal-entry-lines-field.component';
 import { RelatedRecordsFieldComponent } from './related-records-field.component';
 import { UnitSpacesFieldComponent } from './unit-spaces-field.component';
 import { EntityFieldConfig, SelectOption } from './entity-page-config.model';
@@ -55,6 +57,7 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
     EntityFormComponent,
     AttachmentsFieldComponent,
     AttachmentsListComponent,
+    JournalEntryLinesFieldComponent,
     RelatedRecordsFieldComponent,
     UnitSpacesFieldComponent,
   ],
@@ -98,7 +101,7 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
           [showClear]="!field.required"
           placeholder="Select..."
         >
-          <ng-template pTemplate="footer" *ngIf="field.relationCreateFields">
+          <ng-template pTemplate="footer" *ngIf="field.relationCreateFields && !readonly">
             <div class="entity-form__quick-create-footer">
               <p-button
                 [label]="'+ Create new ' + (field.relationCreateLabel || field.label)"
@@ -123,7 +126,7 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
           display="chip"
           placeholder="Select..."
         >
-          <ng-template pTemplate="footer" *ngIf="field.relationCreateFields">
+          <ng-template pTemplate="footer" *ngIf="field.relationCreateFields && !readonly">
             <div class="entity-form__quick-create-footer">
               <p-button
                 [label]="'+ Create new ' + (field.relationCreateLabel || field.label)"
@@ -196,6 +199,10 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
           </ng-template>
         </div>
 
+        <div *ngIf="field.type === 'journal-entry-lines'">
+          <app-journal-entry-lines-field [formControlName]="field.key" />
+        </div>
+
         <div *ngIf="field.type === 'related-records'">
           <app-related-records-field
             *ngIf="modelId; else relatedRecordsUnsaved"
@@ -209,8 +216,11 @@ function requiredArray(control: AbstractControl): ValidationErrors | null {
       </div>
 
       <div class="entity-form__actions">
-        <p-button label="Cancel" severity="secondary" [text]="true" type="button" (onClick)="cancel.emit()" />
-        <p-button label="Save" icon="pi pi-check" type="submit" [disabled]="form.invalid" />
+        <p-button *ngIf="readonly" label="Close" severity="secondary" type="button" (onClick)="cancel.emit()" />
+        <ng-container *ngIf="!readonly">
+          <p-button label="Cancel" severity="secondary" [text]="true" type="button" (onClick)="cancel.emit()" />
+          <p-button label="Save" icon="pi pi-check" type="submit" [disabled]="form.invalid" />
+        </ng-container>
       </div>
     </form>
 
@@ -295,6 +305,10 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
   @Input({ required: true }) fields: EntityFieldConfig[] = [];
   /** Existing record for edit, or null/undefined for a new record. */
   @Input() model: T | null = null;
+  /** View mode: every control renders disabled and there's no Save, just Close --
+   * for the row-actions "eye" button, letting someone see a record without risking
+   * an accidental edit. */
+  @Input() readonly = false;
 
   @Output() save = new EventEmitter<Record<string, unknown>>();
   @Output() cancel = new EventEmitter<void>();
@@ -339,7 +353,7 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
     if (changes['fields']) {
       this.loadAllRelationOptions();
     }
-    if (changes['fields'] || changes['model']) {
+    if (changes['fields'] || changes['model'] || changes['readonly']) {
       this.buildForm();
     }
   }
@@ -379,9 +393,9 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
     for (const field of this.formFields) {
       const raw = this.model ? (this.model as Record<string, unknown>)[field.key] : undefined;
       const isDateLike = field.type === 'date' || field.type === 'action-date';
-      const value = isDateLike && typeof raw === 'string' ? new Date(raw) : raw ?? this.defaultFor(field);
+      const value = isDateLike && typeof raw === 'string' ? fromLocalDateString(raw) : raw ?? this.defaultFor(field);
       const validators = field.required ? [field.type === 'relation-multiselect' ? requiredArray : Validators.required] : [];
-      group[field.key] = [{ value, disabled: false }, validators];
+      group[field.key] = [{ value, disabled: this.readonly }, validators];
 
       // 'action-date' fields write to a sibling "how was this set" field that isn't
       // necessarily its own entry in `fields` (it usually only needs to exist as a
@@ -416,7 +430,7 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
 
   private defaultFor(field: EntityFieldConfig): unknown {
     if (field.type === 'boolean') return false;
-    if (field.type === 'relation-multiselect') return [];
+    if (field.type === 'relation-multiselect' || field.type === 'journal-entry-lines') return [];
     return null;
   }
 
@@ -427,7 +441,7 @@ export class EntityFormComponent<T extends Record<string, unknown>> implements O
     for (const field of this.formFields) {
       const value = raw[field.key];
       const isDateLike = field.type === 'date' || field.type === 'action-date';
-      payload[field.key] = isDateLike && value instanceof Date ? value.toISOString().slice(0, 10) : value;
+      payload[field.key] = isDateLike && value instanceof Date ? toLocalDateString(value) : value;
 
       if (field.type === 'action-date' && field.sourceFieldKey) {
         payload[field.sourceFieldKey] = raw[field.sourceFieldKey] ?? null;

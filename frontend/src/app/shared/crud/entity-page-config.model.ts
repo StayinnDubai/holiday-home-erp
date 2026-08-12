@@ -28,7 +28,13 @@ export type FieldType =
   /** Read-only "what links to this unit" panel (landlord, tenancy contract,
    * Ejari, DTCM permit, move-in permit, rental agreement). Only renders once the
    * record has been saved. */
-  | 'related-records';
+  | 'related-records'
+  /** Debit/credit line editor for a Journal Entry. Unlike 'unit-spaces' etc., the
+   * lines aren't a separately-persisted sub-resource -- a balanced entry only makes
+   * sense as one atomic set of lines, so they travel with the rest of the form and
+   * submit together (see journal-entry-lines-field.component.ts). Renders even for
+   * a new/unsaved record, unlike the "save first" fields above. */
+  | 'journal-entry-lines';
 
 export interface SelectOption {
   label: string;
@@ -93,4 +99,9 @@ export interface EntityPageConfig {
   /** Extra fixed fields merged into every create payload, e.g. a filter this page is scoped to. */
   extraCreatePayload?: Record<string, unknown>;
   pageSize?: number;
+  /** The `entity_type` string this record's changes are logged under in the audit trail
+   * (matching AuditLog.entity_type / whatever string that module's backend service passes
+   * to AuditService.log, e.g. 'counterparty'). Omit for resources with no backend audit
+   * logging yet -- the View dialog's History section only renders when this is set. */
+  auditEntityType?: string;
 }

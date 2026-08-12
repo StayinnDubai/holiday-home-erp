@@ -47,6 +47,9 @@ class CurrencyBase(BaseModel):
     code: str = Field(pattern=r"^\d{3}$")  # manually entered, exactly 3 digits, unique
     name: str
     full_name: str
+    # Spot rate to the company's base currency -- None means "not configured yet",
+    # display/foundation only (v1's GL stays single-currency, see Currency model doc).
+    rate_to_base: float | None = None
 
 
 class CurrencyCreate(CurrencyBase):
@@ -57,6 +60,7 @@ class CurrencyUpdate(BaseModel):
     code: str | None = Field(default=None, pattern=r"^\d{3}$")
     name: str | None = None
     full_name: str | None = None
+    rate_to_base: float | None = None
 
 
 class CurrencyOut(CurrencyBase):

@@ -1,17 +1,20 @@
 """Accounting-core tables. `Account` (the Chart of Accounts) was built in the
 Foundation milestone -- it needs to exist so it can be seeded from Appendix A and
-referenced by cost_type/setup_cost_type defaults later. `Cheque` (doc §2.1) and
-`BankStatementEntry` (doc §5.9 "bank statements" import, feeds §2.10 reconciliation)
-are the first slices of the Accounting-core milestone itself, built ahead of journal
-entries/bills because their own columns were requested directly. Journal entries and
-bills remain deferred -- neither a cheque nor a bank statement entry here posts to
-the GL yet, and reconciliation is entered by hand rather than matched automatically.
+referenced by cost_type/setup_cost_type defaults later. `Cheque` (doc §2.1),
+`Bill` (doc §6, accounts payable), and `BankStatementEntry` (doc §5.9 "bank
+statements" import, feeds §2.10 reconciliation) are the operational sources that
+post to the GL -- see app/posting_rules/ for the actual posting logic, one module
+per source event.
 
 Bank statement data (both "Original" and "Reconciliation") is column-per-bank-account
 configurable (Settings > Bank Account Columns) rather than a fixed schema -- banks
 export statements in different shapes, so `BankStatementEntry.values` is a JSONB blob
 keyed by whatever columns that account's `BankAccountColumn` rows currently define,
-for whichever of the two grids (`applies_to`/`kind`) is in play.
+for whichever of the two grids (`applies_to`/`kind`) is in play. `BankAccountColumn.
+semantic_role` optionally tags which column means "amount"/"date"/"reference" for
+that account, since `data_type` alone (text/number/date) can't disambiguate when an
+account has several number- or date-typed columns (e.g. Debit vs Credit vs Balance)
+-- reconciliation matching (services/reconciliation.py) needs to know which is which.
 """
 import uuid
 from datetime import date
@@ -27,6 +30,10 @@ from app.models.master_data import Counterparty
 # Doc Appendix A: account type buckets.
 ACCOUNT_TYPES = ("asset", "liability", "equity", "revenue", "cost", "other")
 NORMAL_BALANCES = ("debit", "credit")
+
+# Only 'posted' entries count toward balances / Financial Reports (services/reports.py)
+# -- draft/submitted/approved are visible but inert, matching standard GL practice.
+JOURNAL_ENTRY_STATUSES = ("draft", "submitted", "approved", "posted", "reversed")
 
 
 class Account(AuditableRecord, Base):
@@ -80,7 +87,57 @@ class Cheque(AuditableRecord, Base):
     # on_hand|deposited|presented|cleared|bounced|replaced|returned|cancelled|held_as_security
     status: Mapped[str] = mapped_column(String(20), default="on_hand")
 
+    # The other side of this cheque's GL posting (which receivable/payable/revenue
+    # account it settles) -- optional, mirrors BankAccount.chart_account_id's same
+    # "not every record is wired to the GL yet" pattern. Drives posting_rules/cheque.py.
+    contra_account_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("account.id"))
+    # Which of the company's own bank accounts this cheque clears through once
+    # `status` reaches 'cleared' -- needed so posting_rules/cheque.py knows which
+    # bank account's chart_account_id to move the holding-account balance into.
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("bank_account.id"))
+    # Set once a reconciliation match is confirmed (services/reconciliation.py) --
+    # records which imported bank statement line this cheque was matched against,
+    # both for traceability and so the same entry doesn't get suggested again.
+    matched_bank_statement_entry_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("bank_statement_entry.id"))
+
     counterparty: Mapped[Counterparty] = relationship()
+    contra_account: Mapped["Account | None"] = relationship()
+    bank_account: Mapped["BankAccount | None"] = relationship()
+
+
+class Bill(AuditableRecord, Base):
+    """Accounts payable (doc §6). `status` moves draft -> recorded -> ... -> paid;
+    reaching 'recorded' posts the liability (posting_rules/bill.py's
+    `post_bill_recorded`, Dr `contra_account_id` / Cr "2010 Trade payables -
+    suppliers"), reaching 'paid' clears it (`post_bill_paid`, Dr payables / Cr
+    `bank_account_id`'s chart account) -- mirrors Cheque's two-stage posting, except
+    Bill only posts once it reaches 'recorded' (unlike Cheque, which posts
+    unconditionally on create -- a physical cheque is already a real event at
+    'on_hand', whereas a bill's 'draft' status explicitly isn't a confirmed
+    liability yet).
+    """
+
+    __tablename__ = "bill"
+
+    bill_number: Mapped[str] = mapped_column(String(30), unique=True, index=True)
+    supplier_counterparty_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("counterparty.id"), nullable=False)
+    unit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("unit.id"))
+    bill_date: Mapped[date | None] = mapped_column(Date)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    amount: Mapped[float] = mapped_column(Numeric(14, 2, asdecimal=False))
+    # draft|recorded|scheduled|paid|disputed|cancelled
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+
+    # Which expense/cost account this bill debits once recorded -- optional, mirrors
+    # Cheque.contra_account_id. Drives posting_rules/bill.py.
+    contra_account_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("account.id"))
+    # Which of the company's bank accounts pays this bill once 'paid' -- optional,
+    # mirrors Cheque.bank_account_id.
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("bank_account.id"))
+
+    supplier: Mapped[Counterparty] = relationship()
+    contra_account: Mapped["Account | None"] = relationship()
+    bank_account: Mapped["BankAccount | None"] = relationship()
 
 
 class BankAccount(AuditableRecord, Base):
@@ -113,6 +170,12 @@ class BankAccount(AuditableRecord, Base):
 
 # Column data types offered by the Bank Account Columns designer (Settings).
 BANK_ACCOUNT_COLUMN_TYPES = ("text", "number", "date")
+
+# Optional tag saying what a column *means* for reconciliation matching
+# (services/reconciliation.py) -- distinct from data_type, since an account can have
+# several number/date columns (Debit, Credit, Balance; value date vs. posting date)
+# with nothing else to say which one is "the" amount or date.
+BANK_ACCOUNT_COLUMN_SEMANTIC_ROLES = ("amount", "date", "reference")
 
 # Which grid a Bank Account Column / Bank Statement Entry belongs to -- the same
 # designer (Settings > Bank Account Columns) and the same entry table now drive both
@@ -152,6 +215,9 @@ class BankAccountColumn(AuditableRecord, Base):
     label: Mapped[str] = mapped_column(String(100))
     data_type: Mapped[str] = mapped_column(String(20), default="text")  # one of BANK_ACCOUNT_COLUMN_TYPES
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # One of BANK_ACCOUNT_COLUMN_SEMANTIC_ROLES, or None if this column isn't used
+    # for reconciliation matching.
+    semantic_role: Mapped[str | None] = mapped_column(String(20))
 
     bank_account: Mapped[BankAccount] = relationship()
 
@@ -172,3 +238,44 @@ class BankStatementEntry(AuditableRecord, Base):
     values: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     bank_account: Mapped[BankAccount] = relationship()
+
+
+class JournalEntry(AuditableRecord, Base):
+    """General ledger header (doc §3.5 `journal_entry`). Lines (`JournalEntryLine`)
+    carry the actual debit/credit postings; this is just the envelope -- number,
+    date, status, and which module produced it (`source_module`, e.g. 'manual' or
+    'cheque' -- see app/posting_rules/). Only `status == 'posted'` entries count
+    toward account balances / Financial Reports (services/reports.py); once posted,
+    JournalEntryService blocks further edits to the entry's lines (mirrors
+    leasing.py's LOCKED_FIELDS_WHEN_ACTIVE guard for active tenancy contracts) --
+    corrections are a new reversing entry, not a history edit.
+    """
+
+    __tablename__ = "journal_entry"
+
+    number: Mapped[str] = mapped_column(String(30), unique=True, index=True)
+    date: Mapped[date] = mapped_column(Date)
+    period: Mapped[str] = mapped_column(String(7))  # YYYY-MM, derived from date
+    status: Mapped[str] = mapped_column(String(20), default="draft")  # one of JOURNAL_ENTRY_STATUSES
+    source_module: Mapped[str] = mapped_column(String(30), default="manual")
+    memo: Mapped[str | None] = mapped_column(String(500))
+
+
+class JournalEntryLine(AuditableRecord, Base):
+    """One debit or credit posting within a JournalEntry. Exactly one of debit/credit
+    is non-zero per line (enforced in JournalEntryService) -- two columns rather than
+    one signed amount, matching how a ledger is conventionally read. `unit_id` is the
+    doc's "unit dimension" (Appendix A's [D] flag) -- required whenever
+    `account.requires_unit` is true, enforced the same way as the doc's rule.
+    """
+
+    __tablename__ = "journal_entry_line"
+
+    journal_entry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("journal_entry.id"), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("account.id"), nullable=False)
+    unit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("unit.id"))
+    debit: Mapped[float] = mapped_column(Numeric(14, 2, asdecimal=False), default=0)
+    credit: Mapped[float] = mapped_column(Numeric(14, 2, asdecimal=False), default=0)
+    description: Mapped[str | None] = mapped_column(String(255))
+
+    account: Mapped[Account] = relationship()

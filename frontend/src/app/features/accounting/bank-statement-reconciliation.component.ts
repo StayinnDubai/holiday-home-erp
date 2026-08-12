@@ -5,12 +5,15 @@ import { ButtonModule } from 'primeng/button';
 import { ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
-import { map } from 'rxjs';
+import { forkJoin, map } from 'rxjs';
 import { CrudApiService } from '../../core/api/crud-api.service';
 import { ListQuery } from '../../core/models/api.model';
 import { AgGridTableComponent } from '../../shared/ag-grid/ag-grid-table.component';
+import { formatAmount } from '../../shared/utils/amount';
+import { AuditHistoryComponent } from '../../shared/crud/audit-history.component';
 import { EntityFieldConfig, FieldType } from '../../shared/crud/entity-page-config.model';
 import { EntityFormComponent } from '../../shared/crud/entity-form.component';
+import { filterTypeFor } from '../../shared/crud/grid-filter-type';
 import { RowActionsCellRendererComponent, RowActionsContext } from '../../shared/crud/row-actions-cell-renderer.component';
 
 interface BankAccountOption {
@@ -56,7 +59,15 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
 @Component({
   selector: 'app-bank-statement-reconciliation',
   standalone: true,
-  imports: [CommonModule, ButtonModule, ConfirmDialogModule, DialogModule, AgGridTableComponent, EntityFormComponent],
+  imports: [
+    CommonModule,
+    ButtonModule,
+    ConfirmDialogModule,
+    DialogModule,
+    AgGridTableComponent,
+    EntityFormComponent,
+    AuditHistoryComponent,
+  ],
   providers: [ConfirmationService],
   template: `
     <div class="panel">
@@ -80,6 +91,9 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
           [columnDefs]="columnDefs"
           [fetchPage]="fetchPage"
           [context]="gridContext"
+          [stateKey]="'bank-statement-reconciliation:' + selectedAccount.id"
+          (rowView)="openView($event)"
+          (bulkDelete)="onBulkDelete($event)"
         />
       </div>
       <ng-template #noAccount>
@@ -102,7 +116,7 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
     </div>
 
     <p-dialog
-      [header]="editing() ? 'Edit reconciliation line' : 'Add reconciliation line'"
+      [header]="dialogHeader()"
       [(visible)]="dialogVisible"
       [modal]="true"
       [dismissableMask]="true"
@@ -112,9 +126,11 @@ const COLUMN_TYPE_TO_FIELD_TYPE: Record<BankAccountColumnRow['data_type'], Field
         *ngIf="dialogVisible"
         [fields]="formFields"
         [model]="editing()"
+        [readonly]="viewing()"
         (save)="onSave($event)"
         (cancel)="dialogVisible = false"
       />
+      <app-audit-history *ngIf="dialogVisible && viewing() && editing() as row" entityType="bank_statement_entry" [entityId]="row.id" />
     </p-dialog>
 
     <p-confirmDialog [style]="{ width: '26rem' }" icon="pi pi-exclamation-triangle" />
@@ -206,8 +222,10 @@ export class BankStatementReconciliationComponent implements OnInit {
 
   dialogVisible = false;
   editing = signal<Row | null>(null);
+  viewing = signal(false);
 
   readonly gridContext: RowActionsContext<Row> = {
+    onView: (row) => this.openView(row),
     onEdit: (row) => this.openEdit(row),
     onDelete: (row) => this.confirmDelete(row),
   };
@@ -261,11 +279,21 @@ export class BankStatementReconciliationComponent implements OnInit {
           );
           this.columnDefs = [
             ...this.formFields.map(
-              (f): ColDef => ({ field: f.key, headerName: f.label, minWidth: f.gridWidth ?? 140, flex: 1 })
+              (f): ColDef => ({
+                field: f.key,
+                headerName: f.label,
+                minWidth: f.gridWidth ?? 140,
+                flex: 1,
+                filter: filterTypeFor(f),
+                // Every dynamic column here is a bank-statement figure (amount, balance,
+                // debit, credit, ...) -- comma-group it like any other accounting number.
+                valueFormatter: f.type === 'number' ? (p) => formatAmount(p.value) : undefined,
+              })
             ),
             {
               headerName: 'Actions',
-              width: 110,
+              width: 150,
+              pinned: 'right',
               sortable: false,
               filter: false,
               resizable: false,
@@ -278,13 +306,26 @@ export class BankStatementReconciliationComponent implements OnInit {
       });
   }
 
+  dialogHeader(): string {
+    if (this.viewing()) return 'View reconciliation line';
+    return this.editing() ? 'Edit reconciliation line' : 'Add reconciliation line';
+  }
+
   openCreate(): void {
     this.editing.set(null);
+    this.viewing.set(false);
+    this.dialogVisible = true;
+  }
+
+  openView(row: Row): void {
+    this.editing.set(row);
+    this.viewing.set(true);
     this.dialogVisible = true;
   }
 
   openEdit(row: Row): void {
     this.editing.set(row);
+    this.viewing.set(false);
     this.dialogVisible = true;
   }
 
@@ -317,6 +358,28 @@ export class BankStatementReconciliationComponent implements OnInit {
   private onDelete(row: Row): void {
     this.api.remove('bank-statement-entries', row.id).subscribe({
       next: () => this.grid?.refresh(),
+    });
+  }
+
+  onBulkDelete(rows: Row[]): void {
+    if (rows.length === 0) return;
+    this.confirmationService.confirm({
+      header: `Delete ${rows.length} reconciliation lines`,
+      message: `Are you sure you want to delete ${rows.length} selected line(s)? This cannot be undone.`,
+      acceptButtonProps: { label: 'Delete', severity: 'danger' },
+      rejectButtonProps: { label: 'Cancel', severity: 'secondary', text: true },
+      accept: () => {
+        forkJoin(rows.map((row) => this.api.remove('bank-statement-entries', row.id))).subscribe({
+          next: () => {
+            this.grid?.refresh();
+            this.grid?.clearSelection();
+          },
+          error: () => {
+            this.grid?.refresh();
+            this.grid?.clearSelection();
+          },
+        });
+      },
     });
   }
 }

@@ -8,10 +8,18 @@ export const CURRENCIES_CONFIG: EntityPageConfig = {
   title: 'Currencies',
   subtitle: 'Multi-currency support -- picked from here everywhere a currency field appears.',
   resourcePath: 'currencies',
+  auditEntityType: 'currency',
   fields: [
     { key: 'code', label: 'Unique code', type: 'text', required: true, gridWidth: 120 },
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 140 },
     { key: 'full_name', label: 'Full name', type: 'text', required: true, gridWidth: 240 },
+    {
+      key: 'rate_to_base',
+      label: 'Rate to base currency',
+      type: 'number',
+      gridWidth: 170,
+      gridValueFormatter: (v) => (v === null || v === undefined ? 'Not set' : String(v)),
+    },
   ],
 };
 
@@ -31,6 +39,7 @@ export const BANK_ACCOUNT_COLUMNS_CONFIG: EntityPageConfig = {
   title: 'Bank Account Columns',
   subtitle: 'Custom columns per bank account -- picked up by both Bank Statement - Original and - Reconciliation.',
   resourcePath: 'bank-account-columns',
+  auditEntityType: 'bank_account_column',
   fields: [
     {
       key: 'bank_account_id',
@@ -68,6 +77,17 @@ export const BANK_ACCOUNT_COLUMNS_CONFIG: EntityPageConfig = {
       gridWidth: 120,
     },
     { key: 'sort_order', label: 'Sort order', type: 'number', gridWidth: 120 },
+    {
+      key: 'semantic_role',
+      label: 'Role (for matching)',
+      type: 'select',
+      options: [
+        { label: 'Amount', value: 'amount' },
+        { label: 'Date', value: 'date' },
+        { label: 'Reference', value: 'reference' },
+      ],
+      gridWidth: 160,
+    },
   ],
 };
 

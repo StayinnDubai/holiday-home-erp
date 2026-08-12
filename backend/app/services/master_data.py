@@ -4,7 +4,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
-from app.core.pagination import PaginationParams, paginate
+from app.core.pagination import PaginationParams, apply_filters, paginate
 from app.models.master_data import (
     Building,
     BuildingAmenity,
@@ -53,15 +53,14 @@ class BuildingService:
         stmt = select(Building).where(Building.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(Building.name.ilike(f"%{params.q}%"))
-        if params.sort_by == "unit_count":
-            order_col = (
-                select(func.count(Unit.id))
-                .where(Unit.building_id == Building.id, Unit.is_deleted.is_(False))
-                .correlate(Building)
-                .scalar_subquery()
-            )
-        else:
-            order_col = _sort_col(Building, params.sort_by, Building.name)
+        unit_count_col = (
+            select(func.count(Unit.id))
+            .where(Unit.building_id == Building.id, Unit.is_deleted.is_(False))
+            .correlate(Building)
+            .scalar_subquery()
+        )
+        stmt = apply_filters(stmt, Building, params.filter_model, extra_columns={"unit_count": unit_count_col})
+        order_col = unit_count_col if params.sort_by == "unit_count" else _sort_col(Building, params.sort_by, Building.name)
         stmt = stmt.order_by(order_col.asc() if params.sort_dir != "desc" else order_col.desc())
         rows, total = paginate(db, stmt, params)
         BuildingService._attach_unit_counts(db, rows)
@@ -148,11 +147,14 @@ def _attach_building_names(db: Session, rows: list, building_id_attr: str = "bui
 def _sort_col_with_building_name(stmt: Select, model, params: PaginationParams, default):
     """`building_name` is a display column joined in at read time (`_attach_building_names`),
     not a real column on `model` -- `_sort_col`'s `hasattr` check misses it, so a click on
-    that header silently no-ops. Join it in for real only when it's actually the sort key."""
-    if params.sort_by == "building_name":
+    that header silently no-ops. Join it in for real only when it's actually the sort key
+    or being filtered on (`apply_filters`' `extra_columns`)."""
+    needs_join = params.sort_by == "building_name" or (params.filter_model or {}).get("building_name")
+    if needs_join:
         stmt = stmt.outerjoin(Building, Building.id == model.building_id)
-        return stmt, Building.name
-    return stmt, _sort_col(model, params.sort_by, default)
+    stmt = apply_filters(stmt, model, params.filter_model, extra_columns={"building_name": Building.name} if needs_join else None)
+    order_col = Building.name if params.sort_by == "building_name" else _sort_col(model, params.sort_by, default)
+    return stmt, order_col
 
 
 class BuildingContactService:
@@ -344,16 +346,25 @@ class CounterpartyService:
             group_joined = True
         if params.q:
             stmt = stmt.where(Counterparty.name.ilike(f"%{params.q}%"))
+
+        unit_count_col = (
+            select(func.count(UnitLandlord.id))
+            .join(Unit, Unit.id == UnitLandlord.unit_id)
+            .where(UnitLandlord.landlord_id == Counterparty.id, Unit.is_deleted.is_(False))
+            .correlate(Counterparty)
+            .scalar_subquery()
+        )
+        needs_group_filter_join = not group_joined and (params.filter_model or {}).get("group_name")
+        if needs_group_filter_join:
+            stmt = stmt.outerjoin(CounterpartyGroup, CounterpartyGroup.id == Counterparty.group_id)
+        stmt = apply_filters(
+            stmt, Counterparty, params.filter_model, extra_columns={"unit_count": unit_count_col, "group_name": CounterpartyGroup.name}
+        )
+
         if params.sort_by == "unit_count":
-            order_col = (
-                select(func.count(UnitLandlord.id))
-                .join(Unit, Unit.id == UnitLandlord.unit_id)
-                .where(UnitLandlord.landlord_id == Counterparty.id, Unit.is_deleted.is_(False))
-                .correlate(Counterparty)
-                .scalar_subquery()
-            )
+            order_col = unit_count_col
         elif params.sort_by == "group_name":
-            if not group_joined:
+            if not group_joined and not needs_group_filter_join:
                 stmt = stmt.outerjoin(CounterpartyGroup, CounterpartyGroup.id == Counterparty.group_id)
             order_col = CounterpartyGroup.name
         else:
@@ -452,15 +463,20 @@ class CounterpartyGroupService:
         stmt = select(CounterpartyGroup).where(CounterpartyGroup.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(CounterpartyGroup.name.ilike(f"%{params.q}%") | CounterpartyGroup.code.ilike(f"%{params.q}%"))
-        if params.sort_by == "counterparty_count":
-            order_col = (
-                select(func.count(Counterparty.id))
-                .where(Counterparty.group_id == CounterpartyGroup.id, Counterparty.is_deleted.is_(False))
-                .correlate(CounterpartyGroup)
-                .scalar_subquery()
-            )
-        else:
-            order_col = _sort_col(CounterpartyGroup, params.sort_by, CounterpartyGroup.code)
+        counterparty_count_col = (
+            select(func.count(Counterparty.id))
+            .where(Counterparty.group_id == CounterpartyGroup.id, Counterparty.is_deleted.is_(False))
+            .correlate(CounterpartyGroup)
+            .scalar_subquery()
+        )
+        stmt = apply_filters(
+            stmt, CounterpartyGroup, params.filter_model, extra_columns={"counterparty_count": counterparty_count_col}
+        )
+        order_col = (
+            counterparty_count_col
+            if params.sort_by == "counterparty_count"
+            else _sort_col(CounterpartyGroup, params.sort_by, CounterpartyGroup.code)
+        )
         stmt = stmt.order_by(order_col.asc() if params.sort_dir != "desc" else order_col.desc())
         rows, total = paginate(db, stmt, params)
         CounterpartyGroupService._attach_counterparty_counts(db, rows)

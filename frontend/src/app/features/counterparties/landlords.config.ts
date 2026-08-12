@@ -13,6 +13,7 @@ export const LANDLORDS_CONFIG: EntityPageConfig = {
   title: 'Landlords',
   subtitle: 'Counterparties belonging to a landlord group. "Units" is a live count of units this landlord co-owns.',
   resourcePath: 'counterparties',
+  auditEntityType: 'counterparty',
   extraListParams: { landlord_only: 'true' },
   fields: [
     COUNTERPARTY_BASE_FIELDS[0],

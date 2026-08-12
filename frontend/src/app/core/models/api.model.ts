@@ -21,6 +21,9 @@ export interface ListQuery {
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
   q?: string;
+  /** JSON-serialized ag-Grid filterModel, one entry per filtered column -- see
+   * backend/app/core/pagination.py's `apply_filters` for the shape it expects. */
+  filter_model?: string;
 }
 
 export interface ApiErrorBody {

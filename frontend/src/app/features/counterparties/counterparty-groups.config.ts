@@ -10,6 +10,7 @@ export const COUNTERPARTY_GROUPS_CONFIG: EntityPageConfig = {
   title: 'Counterparty Group',
   subtitle: 'Manually-maintained groups for landlords/tenants/suppliers/agents/OTAs. "Counterparties" is a live count of members.',
   resourcePath: 'counterparty-groups',
+  auditEntityType: 'counterparty_group',
   fields: [
     { key: 'code', label: 'Code', type: 'text', required: true, gridWidth: 120 },
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 220 },

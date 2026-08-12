@@ -5,11 +5,14 @@ import { ButtonModule } from 'primeng/button';
 import { ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
+import { forkJoin } from 'rxjs';
 import { CrudApiService } from '../../core/api/crud-api.service';
 import { ListQuery } from '../../core/models/api.model';
 import { AgGridTableComponent } from '../ag-grid/ag-grid-table.component';
+import { AuditHistoryComponent } from './audit-history.component';
 import { EntityFieldConfig, EntityPageConfig } from './entity-page-config.model';
 import { EntityFormComponent } from './entity-form.component';
+import { filterTypeFor } from './grid-filter-type';
 import { RowActionsCellRendererComponent, RowActionsContext } from './row-actions-cell-renderer.component';
 
 type Row = Record<string, unknown> & { id: string };
@@ -32,7 +35,15 @@ type Row = Record<string, unknown> & { id: string };
 @Component({
   selector: 'app-entity-page',
   standalone: true,
-  imports: [CommonModule, ButtonModule, ConfirmDialogModule, DialogModule, AgGridTableComponent, EntityFormComponent],
+  imports: [
+    CommonModule,
+    ButtonModule,
+    ConfirmDialogModule,
+    DialogModule,
+    AgGridTableComponent,
+    EntityFormComponent,
+    AuditHistoryComponent,
+  ],
   providers: [ConfirmationService],
   template: `
     <div class="panel">
@@ -51,12 +62,16 @@ type Row = Record<string, unknown> & { id: string };
           [fetchPage]="fetchPage"
           [pageSize]="config.pageSize || 25"
           [context]="gridContext"
+          [stateKey]="config.resourcePath"
+          (rowView)="openView($event)"
+          (bulkDelete)="onBulkDelete($event)"
+          (cellEdited)="onCellEdited($event)"
         />
       </div>
     </div>
 
     <p-dialog
-      [header]="editing() ? 'Edit ' + config.title : 'Add ' + config.title"
+      [header]="dialogHeader()"
       [(visible)]="dialogVisible"
       [modal]="true"
       [dismissableMask]="true"
@@ -66,8 +81,14 @@ type Row = Record<string, unknown> & { id: string };
         *ngIf="dialogVisible"
         [fields]="config.fields"
         [model]="editing()"
+        [readonly]="viewing()"
         (save)="onSave($event)"
         (cancel)="dialogVisible = false"
+      />
+      <app-audit-history
+        *ngIf="dialogVisible && viewing() && config.auditEntityType && editing() as row"
+        [entityType]="config.auditEntityType"
+        [entityId]="row.id"
       />
     </p-dialog>
 
@@ -121,8 +142,10 @@ export class EntityPageComponent implements OnInit {
   columnDefs: ColDef[] = [];
   dialogVisible = false;
   editing = signal<Row | null>(null);
+  viewing = signal(false);
 
   readonly gridContext: RowActionsContext<Row> = {
+    onView: (row) => this.openView(row),
     onEdit: (row) => this.openEdit(row),
     onDelete: (row) => this.confirmDelete(row),
   };
@@ -145,12 +168,25 @@ export class EntityPageComponent implements OnInit {
           minWidth: f.gridWidth ?? 140,
           flex: 1,
           sortable: f.sortable !== false,
+          // Same gate as sortable: a computed/aggregate field with no join-backed
+          // server-side match (sortable: false) can't be filtered server-side either
+          // -- offering the filter UI there would silently do nothing.
+          filter: f.sortable !== false ? filterTypeFor(f) : false,
           valueFormatter: f.gridValueFormatter ? (p) => f.gridValueFormatter!(p.value) : undefined,
+          // Boolean flags (on-hold, active, ...) are low-risk to edit inline -- a single
+          // toggle, no cross-field validation -- unlike text/number/select fields, which
+          // keep going through the full form (required checks, unique-code validation,
+          // etc. that only the modal enforces). Gated on the same `sortable` flag as
+          // above: a computed boolean has nothing real to PATCH.
+          ...(f.type === 'boolean' && f.sortable !== false
+            ? { editable: true, cellRenderer: 'agCheckboxCellRenderer', cellEditor: 'agCheckboxCellEditor' }
+            : {}),
         })
       ),
       {
         headerName: 'Actions',
-        width: 110,
+        width: 150,
+        pinned: 'right',
         sortable: false,
         filter: false,
         resizable: false,
@@ -159,13 +195,26 @@ export class EntityPageComponent implements OnInit {
     ];
   }
 
+  dialogHeader(): string {
+    if (this.viewing()) return 'View ' + this.config.title;
+    return this.editing() ? 'Edit ' + this.config.title : 'Add ' + this.config.title;
+  }
+
   openCreate(): void {
     this.editing.set(null);
+    this.viewing.set(false);
+    this.dialogVisible = true;
+  }
+
+  openView(row: Row): void {
+    this.editing.set(row);
+    this.viewing.set(true);
     this.dialogVisible = true;
   }
 
   openEdit(row: Row): void {
     this.editing.set(row);
+    this.viewing.set(false);
     this.dialogVisible = true;
   }
 
@@ -201,6 +250,40 @@ export class EntityPageComponent implements OnInit {
   private onDelete(row: Row): void {
     this.api.remove(this.config.resourcePath, row.id).subscribe({
       next: () => this.grid?.refresh(),
+    });
+  }
+
+  onBulkDelete(rows: Row[]): void {
+    if (rows.length === 0) return;
+    this.confirmationService.confirm({
+      header: `Delete ${rows.length} ${this.config.title}`,
+      message: `Are you sure you want to delete ${rows.length} selected record(s)? This cannot be undone.`,
+      acceptButtonProps: { label: 'Delete', severity: 'danger' },
+      rejectButtonProps: { label: 'Cancel', severity: 'secondary', text: true },
+      accept: () => {
+        forkJoin(rows.map((row) => this.api.remove(this.config.resourcePath, row.id))).subscribe({
+          next: () => {
+            this.grid?.refresh();
+            this.grid?.clearSelection();
+          },
+          error: () => {
+            // Interceptor already surfaced the failure as a toast -- refresh so the grid
+            // reflects whichever rows did make it through before the failing one.
+            this.grid?.refresh();
+            this.grid?.clearSelection();
+          },
+        });
+      },
+    });
+  }
+
+  onCellEdited(evt: { data: Row; field: string; newValue: unknown }): void {
+    this.api.update(this.config.resourcePath, evt.data.id, { [evt.field]: evt.newValue }).subscribe({
+      // Re-fetch either way: on success to pick up any server-computed side effects, on
+      // failure to snap the checkbox back to the server's actual value (the interceptor
+      // already showed the error toast).
+      next: () => this.grid?.refresh(),
+      error: () => this.grid?.refresh(),
     });
   }
 }

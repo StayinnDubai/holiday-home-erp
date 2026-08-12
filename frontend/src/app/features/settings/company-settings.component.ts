@@ -10,6 +10,7 @@ import { CompanyApiService, CompanyRecord } from '../../core/api/company-api.ser
 import { CrudApiService } from '../../core/api/crud-api.service';
 import { AttachmentsFieldComponent } from '../../shared/crud/attachments-field.component';
 import { AttachmentsListComponent } from '../../shared/crud/attachments-list.component';
+import { fromLocalDateString, toLocalDateString } from '../../shared/utils/date';
 
 interface CurrencyOption {
   id: string;
@@ -303,7 +304,7 @@ export class CompanySettingsComponent implements OnInit {
         this.company = res.data;
         this.form.patchValue({
           ...res.data,
-          date_of_registration: res.data.date_of_registration ? new Date(res.data.date_of_registration) : null,
+          date_of_registration: res.data.date_of_registration ? fromLocalDateString(res.data.date_of_registration) : null,
         });
       },
       error: () => {
@@ -320,7 +321,7 @@ export class CompanySettingsComponent implements OnInit {
     const raw = this.form.getRawValue();
     const payload = {
       ...raw,
-      date_of_registration: raw.date_of_registration instanceof Date ? raw.date_of_registration.toISOString().slice(0, 10) : null,
+      date_of_registration: raw.date_of_registration instanceof Date ? toLocalDateString(raw.date_of_registration) : null,
     };
 
     this.api.update(payload).subscribe({

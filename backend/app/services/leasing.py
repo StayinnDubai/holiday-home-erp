@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
-from app.core.pagination import PaginationParams, paginate
+from app.core.pagination import PaginationParams, apply_filters, paginate
 from app.models.leasing import EjariRegistration, TenancyContract, TenancyContractParty
 from app.models.master_data import Counterparty, Unit
 from app.schemas.leasing import (
@@ -45,8 +45,19 @@ class TenancyContractService:
             stmt = stmt.where(TenancyContract.contract_number.ilike(f"%{params.q}%"))
         if unit_id is not None:
             stmt = stmt.where(TenancyContract.unit_id == unit_id)
-        if params.sort_by in ("unit_code", "unit_name"):
+        needs_unit_join = params.sort_by in ("unit_code", "unit_name") or (params.filter_model or {}).keys() & {
+            "unit_code",
+            "unit_name",
+        }
+        if needs_unit_join:
             stmt = stmt.join(Unit, Unit.id == TenancyContract.unit_id)
+        stmt = apply_filters(
+            stmt,
+            TenancyContract,
+            params.filter_model,
+            extra_columns={"unit_code": Unit.unit_code, "unit_name": Unit.unit_name} if needs_unit_join else None,
+        )
+        if params.sort_by in ("unit_code", "unit_name"):
             col = Unit.unit_code if params.sort_by == "unit_code" else Unit.unit_name
         else:
             col = _sort_col(TenancyContract, params.sort_by, TenancyContract.contract_number)
@@ -271,9 +282,17 @@ class EjariRegistrationService:
                 TenancyContract.unit_id == unit_id
             )
             contract_joined = True
+        needs_contract_join = params.sort_by == "contract_number" or "contract_number" in (params.filter_model or {})
+        if needs_contract_join and not contract_joined:
+            stmt = stmt.join(TenancyContract, TenancyContract.id == EjariRegistration.contract_id)
+            contract_joined = True
+        stmt = apply_filters(
+            stmt,
+            EjariRegistration,
+            params.filter_model,
+            extra_columns={"contract_number": TenancyContract.contract_number} if contract_joined else None,
+        )
         if params.sort_by == "contract_number":
-            if not contract_joined:
-                stmt = stmt.join(TenancyContract, TenancyContract.id == EjariRegistration.contract_id)
             col = TenancyContract.contract_number
         else:
             col = _sort_col(EjariRegistration, params.sort_by, EjariRegistration.registration_date)

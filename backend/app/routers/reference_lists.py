@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.core.errors import ApiError
-from app.core.pagination import PaginationParams, paginate, pagination_params
+from app.core.pagination import PaginationParams, apply_filters, paginate, pagination_params
 from app.models.foundation import ReferenceListItem
 from app.schemas.common import ItemResponse, ListMeta, ListResponse
 from app.schemas.foundation import ReferenceListItemCreate, ReferenceListItemOut, ReferenceListItemUpdate
@@ -21,6 +21,7 @@ def list_reference_items(
     stmt = select(ReferenceListItem).where(ReferenceListItem.is_deleted.is_(False))
     if list_name:
         stmt = stmt.where(ReferenceListItem.list_name == list_name)
+    stmt = apply_filters(stmt, ReferenceListItem, params.filter_model)
     if params.sort_by and hasattr(ReferenceListItem, params.sort_by):
         col = getattr(ReferenceListItem, params.sort_by)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())

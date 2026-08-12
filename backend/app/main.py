@@ -10,6 +10,7 @@ from app.routers import (
     bank_account_columns,
     bank_accounts,
     bank_statement_entries,
+    bills,
     building_amenities,
     building_contacts,
     building_deposits,
@@ -23,7 +24,10 @@ from app.routers import (
     ejari_registrations,
     inventory_items,
     inventory_movements,
+    journal_entries,
+    reconciliation,
     reference_lists,
+    reports,
     settings_,
     tenancy_contracts,
     unit_spaces,
@@ -66,6 +70,7 @@ app.include_router(unit_spaces.router, prefix=API_PREFIX)
 app.include_router(tenancy_contracts.router, prefix=API_PREFIX)
 app.include_router(ejari_registrations.router, prefix=API_PREFIX)
 app.include_router(cheques.router, prefix=API_PREFIX)
+app.include_router(bills.router, prefix=API_PREFIX)
 app.include_router(bank_accounts.router, prefix=API_PREFIX)
 app.include_router(bank_account_columns.router, prefix=API_PREFIX)
 app.include_router(bank_statement_entries.router, prefix=API_PREFIX)
@@ -74,6 +79,9 @@ app.include_router(currencies.router, prefix=API_PREFIX)
 app.include_router(accounts.router, prefix=API_PREFIX)
 app.include_router(inventory_items.router, prefix=API_PREFIX)
 app.include_router(inventory_movements.router, prefix=API_PREFIX)
+app.include_router(journal_entries.router, prefix=API_PREFIX)
+app.include_router(reports.router, prefix=API_PREFIX)
+app.include_router(reconciliation.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

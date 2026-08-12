@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ApiError
-from app.core.pagination import PaginationParams, paginate
+from app.core.pagination import PaginationParams, apply_filters, paginate
 from app.models.foundation import Currency
 from app.schemas.foundation import CurrencyCreate, CurrencyUpdate
 from app.services.audit import AuditService
@@ -22,6 +22,7 @@ class CurrencyService:
         stmt = select(Currency).where(Currency.is_deleted.is_(False))
         if params.q:
             stmt = stmt.where(Currency.name.ilike(f"%{params.q}%") | Currency.full_name.ilike(f"%{params.q}%"))
+        stmt = apply_filters(stmt, Currency, params.filter_model)
         col = _sort_col(Currency, params.sort_by, Currency.code)
         stmt = stmt.order_by(col.asc() if params.sort_dir != "desc" else col.desc())
         return paginate(db, stmt, params)

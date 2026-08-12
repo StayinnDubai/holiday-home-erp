@@ -1,4 +1,5 @@
 import { EntityPageConfig, SelectOption } from '../../shared/crud/entity-page-config.model';
+import { formatAmount } from '../../shared/utils/amount';
 
 /** Year-built is a bounded, pick-from-a-list field rather than a free number --
  * generated once here rather than hard-coded, so it never needs manual upkeep. */
@@ -26,6 +27,7 @@ export const BUILDINGS_CONFIG: EntityPageConfig = {
   title: 'Buildings',
   subtitle: 'Everything true of a building rather than a unit (doc §1.3) -- access rules, permits and restrictions live here.',
   resourcePath: 'buildings',
+  auditEntityType: 'building',
   fields: [
     { key: 'name', label: 'Name', type: 'text', required: true, gridWidth: 220 },
     { key: 'unit_count', label: 'Units', type: 'number', showInForm: false, gridWidth: 90 },
@@ -105,6 +107,7 @@ export const BUILDING_CONTACTS_CONFIG: EntityPageConfig = {
   title: 'Building Contacts',
   subtitle: 'Per-building contacts -- management, OA, security, technician, concierge, cleaning, parking (doc §1.3).',
   resourcePath: 'building-contacts',
+  auditEntityType: 'building_contact',
   fields: [
     {
       key: 'building_id',
@@ -151,6 +154,7 @@ export const BUILDING_AMENITIES_CONFIG: EntityPageConfig = {
   title: 'Building Amenities',
   subtitle: 'Pool, gym, sauna, kids’ area, BBQ, co-working... (doc §1.3). Feeds the guest information pack and check-in task.',
   resourcePath: 'building-amenities',
+  auditEntityType: 'building_amenity',
   fields: [
     {
       key: 'building_id',
@@ -191,6 +195,7 @@ export const BUILDING_DEPOSITS_CONFIG: EntityPageConfig = {
   title: 'Building Deposits & Fees',
   subtitle: 'Refundable deposits and non-refundable fees held with building management (doc §1.3) -- tracked separately because only one comes back.',
   resourcePath: 'building-deposits',
+  auditEntityType: 'building_deposit',
   fields: [
     {
       key: 'building_id',
@@ -214,7 +219,7 @@ export const BUILDING_DEPOSITS_CONFIG: EntityPageConfig = {
       gridWidth: 160,
     },
     { key: 'description', label: 'Description', type: 'text', required: true, gridWidth: 220 },
-    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridWidth: 130 },
+    { key: 'amount', label: 'Amount (AED)', type: 'number', required: true, gridWidth: 130, gridValueFormatter: formatAmount },
     { key: 'date', label: 'Date', type: 'date', gridWidth: 120 },
     { key: 'reference', label: 'Reference', type: 'text', showInGrid: false },
     { key: 'refundable', label: 'Refundable', type: 'boolean', gridWidth: 110 },
