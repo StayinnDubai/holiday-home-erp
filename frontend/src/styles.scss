@@ -1,26 +1,95 @@
-/* Global styles. PrimeNG's own component styles come from the Aura theme preset
-   registered via providePrimeNG() in app.config.ts -- only icons + the ag-Grid legacy
-   CSS theme (see shared/ag-grid/ag-grid-table.component.ts) need importing here. */
+/* Global styles.
+ *
+ * Phase 0 of the visual redesign: brand tokens + self-hosted fonts + an --ag-* bridge so
+ * ag-Grid (Quartz theme) stops being a visually disconnected third design system next to
+ * PrimeNG (Aura preset, see app.config.ts) and this app's own components. See
+ * app/core/design-tokens.ts for where these hex values come from and the design-audit
+ * artifact from this conversation for the full rationale.
+ *
+ * PrimeNG's own component styles come from the Aura preset registered via providePrimeNG()
+ * in app.config.ts -- this file only needs: web fonts, the shared :root token palette,
+ * the ag-Grid CSS import + its variable bridge, and page-level base styles.
+ */
 @import 'primeicons/primeicons.css';
 @import 'ag-grid-community/styles/ag-grid.css';
 @import 'ag-grid-community/styles/ag-theme-quartz.css';
+
+/* Self-hosted variable fonts (not a Google Fonts CDN link) -- one file per family covers
+ * the whole weight range we use, no external request at runtime. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/fraunces-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/inter-variable.woff2') format('woff2');
+}
+
+:root {
+  /* ---- Brand tokens -- keep in sync with app/core/design-tokens.ts ---- */
+  --color-canvas: #F6F1EA;
+  --color-surface: #FFFDFB;
+  --color-surface-sunken: #F6F4F1;
+  --color-ink: #1C1917;
+  --color-ink-muted: #6B6058;
+  --color-ink-faint: #918982;
+  --color-line: #E4DDD3;
+  --color-line-strong: #D0CBC7;
+  --color-accent: #8C6B3A;
+  --color-accent-hover: #765B33;
+  --color-accent-tint: #EFE9E0;
+  --color-success: #3F6B4A;
+  --color-success-tint: #E8EFE6;
+  --color-warning: #A66A1F;
+  --color-warning-tint: #F5E6CC;
+  --color-danger: #9B3A2E;
+  --color-danger-tint: #F5E0DB;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --shadow-elevated: 0 8px 24px rgba(28, 17, 9, 0.10);
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+}
 
 html,
 body {
   height: 100%;
   margin: 0;
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
-  background: #f1f5f9;
-  color: #0f172a;
+  font-family: var(--font-body);
+  background: var(--color-canvas);
+  color: var(--color-ink);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* ---- ag-Grid (Quartz theme) variable bridge ----
+ * The Quartz CSS theme reads these custom properties directly (confirmed against the
+ * shipped stylesheet) -- scoping the override to .ag-theme-quartz is enough, no need for
+ * the newer JS Theming API this app deliberately opts out of (see ag-grid-table.component). */
+.ag-theme-quartz {
+  --ag-background-color: var(--color-surface);
+  --ag-foreground-color: var(--color-ink);
+  --ag-data-color: var(--color-ink);
+  --ag-border-color: var(--color-line);
+  --ag-secondary-border-color: var(--color-line);
+  --ag-header-background-color: var(--color-surface-sunken);
+  --ag-header-foreground-color: var(--color-ink-muted);
+  --ag-row-hover-color: var(--color-accent-tint);
+  --ag-active-color: var(--color-accent);
+  --ag-input-focus-border-color: var(--color-accent);
+  --ag-font-family: var(--font-body);
+  --ag-border-radius: var(--radius-sm);
 }

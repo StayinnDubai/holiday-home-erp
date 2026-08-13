@@ -4,10 +4,10 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { providePrimeNG } from 'primeng/config';
 import { MessageService } from 'primeng/api';
-import Aura from '@primeng/themes/aura';
 
 import { routes } from './app.routes';
 import { errorInterceptor } from './core/api/error.interceptor';
+import { brandPreset } from './core/brand-preset';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -15,7 +15,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     provideAnimationsAsync(),
     provideHttpClient(withInterceptors([errorInterceptor])),
-    providePrimeNG({ theme: { preset: Aura, options: { darkModeSelector: '.app-dark' } } }),
+    providePrimeNG({ theme: { preset: brandPreset, options: { darkModeSelector: '.app-dark' } } }),
     MessageService,
   ],
 };

@@ -126,13 +126,8 @@ export class AppLayoutComponent implements OnInit {
       items: [
         { label: 'Units', routerLink: '/units' },
         { label: 'Buildings', routerLink: '/buildings' },
-        { label: 'Building Contacts', routerLink: '/buildings/contacts' },
-        { label: 'Building Amenities', routerLink: '/buildings/amenities' },
-        { label: 'Building Deposits & Fees', routerLink: '/buildings/deposits' },
         { label: 'Landlords', routerLink: '/landlords' },
         { label: 'Tenancy Contracts', routerLink: '/contracts/tenancy' },
-        { label: 'Ejari Registrations', routerLink: '/contracts/tenancy/ejari' },
-        { label: 'Discounts & Grace Periods', routerLink: '/contracts/tenancy/adjustments' },
         { label: 'Rental Agreements', routerLink: '/contracts/rental' },
         { label: 'DTCM Permits', routerLink: '/permits/dtcm' },
         { label: 'Move-in Permits', routerLink: '/permits/move-in' },
@@ -140,31 +135,9 @@ export class AppLayoutComponent implements OnInit {
         { label: 'All Documents', routerLink: '/documents' },
       ],
     },
-    {
-      label: 'Reservations',
-      icon: 'pi pi-calendar',
-      items: [
-        { label: 'Reservation List / Calendar', routerLink: '/reservations' },
-        { label: 'Guests', routerLink: '/reservations/guests' },
-      ],
-    },
-    {
-      label: 'Tasks',
-      icon: 'pi pi-check-square',
-      items: [
-        { label: 'Task Board', routerLink: '/tasks/board' },
-        { label: 'Task Calendar', routerLink: '/tasks/calendar' },
-      ],
-    },
-    {
-      label: 'Bills',
-      icon: 'pi pi-file',
-      items: [
-        { label: 'Bills', routerLink: '/bills' },
-        { label: 'Recurring Templates', routerLink: '/bills/recurring' },
-        { label: 'Missing Bill Report', routerLink: '/bills/missing' },
-      ],
-    },
+    { label: 'Reservations', icon: 'pi pi-calendar', routerLink: '/reservations' },
+    { label: 'Tasks', icon: 'pi pi-check-square', routerLink: '/tasks' },
+    { label: 'Bills', icon: 'pi pi-file', routerLink: '/bills' },
     {
       label: 'Accounting',
       icon: 'pi pi-book',

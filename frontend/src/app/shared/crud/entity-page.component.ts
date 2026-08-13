@@ -46,7 +46,7 @@ type Row = Record<string, unknown> & { id: string };
   ],
   providers: [ConfirmationService],
   template: `
-    <div class="panel">
+    <div class="panel" [style.height]="embedded ? 'calc(100vh - 6.5rem - 3rem)' : 'calc(100vh - 6.5rem)'">
       <div class="panel__header">
         <div>
           <h2 class="panel__title">{{ config.title }}</h2>
@@ -103,7 +103,6 @@ type Row = Record<string, unknown> & { id: string };
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        height: calc(100vh - 6.5rem);
         min-height: 420px;
       }
       .panel__header {
@@ -136,6 +135,11 @@ type Row = Record<string, unknown> & { id: string };
 })
 export class EntityPageComponent implements OnInit {
   @Input({ required: true }) config!: EntityPageConfig;
+  /** Set by TabbedPageComponent when this page is nested inside a tab, instead of
+   * being the sole content under the top bar -- accounts for the extra vertical
+   * space PrimeNG's tab nav bar takes above it. Adjust the offset here if the tab
+   * nav bar's actual height ever changes. */
+  @Input() embedded = false;
 
   @ViewChild('grid') grid?: AgGridTableComponent<Row>;
 

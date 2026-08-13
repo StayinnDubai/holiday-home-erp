@@ -33,6 +33,11 @@ import { DTCM_PERMITS_CONFIG } from './features/permits/permits.config';
  */
 const loadEntityPage = () => import('./shared/crud/entity-page.component').then((m) => m.EntityPageComponent);
 
+// Groups of routes that used to be `x`, `x/y1`, `x/y2` (separate sidebar items, separate
+// pages) are now one sidebar item + one TabbedPageComponent route with a tab per config --
+// see shared/crud/tabbed-page.component.ts for why this is a pure UI consolidation.
+const loadTabbedPage = () => import('./shared/crud/tabbed-page.component').then((m) => m.TabbedPageComponent);
+
 export const routes: Routes = [
   {
     path: '',
@@ -47,14 +52,32 @@ export const routes: Routes = [
 
       // ---- General ----
       { path: 'units', loadComponent: loadEntityPage, data: { title: 'Units', config: UNITS_CONFIG } },
-      { path: 'buildings', loadComponent: loadEntityPage, data: { title: 'Buildings', config: BUILDINGS_CONFIG } },
-      { path: 'buildings/contacts', loadComponent: loadEntityPage, data: { title: 'Building Contacts', config: BUILDING_CONTACTS_CONFIG } },
-      { path: 'buildings/amenities', loadComponent: loadEntityPage, data: { title: 'Building Amenities', config: BUILDING_AMENITIES_CONFIG } },
-      { path: 'buildings/deposits', loadComponent: loadEntityPage, data: { title: 'Building Deposits & Fees', config: BUILDING_DEPOSITS_CONFIG } },
+      {
+        path: 'buildings',
+        loadComponent: loadTabbedPage,
+        data: {
+          title: 'Buildings',
+          tabs: [
+            { label: 'Buildings', config: BUILDINGS_CONFIG },
+            { label: 'Contacts', config: BUILDING_CONTACTS_CONFIG },
+            { label: 'Amenities', config: BUILDING_AMENITIES_CONFIG },
+            { label: 'Deposits & Fees', config: BUILDING_DEPOSITS_CONFIG },
+          ],
+        },
+      },
       { path: 'landlords', loadComponent: loadEntityPage, data: { title: 'Landlords', config: LANDLORDS_CONFIG } },
-      { path: 'contracts/tenancy', loadComponent: loadEntityPage, data: { title: 'Tenancy Contracts', config: TENANCY_CONTRACTS_CONFIG } },
-      { path: 'contracts/tenancy/ejari', loadComponent: loadEntityPage, data: { title: 'Ejari Registrations', config: EJARI_REGISTRATIONS_CONFIG } },
-      { path: 'contracts/tenancy/adjustments', loadComponent: loadEntityPage, data: { title: 'Discounts & Grace Periods', config: TENANCY_CONTRACT_ADJUSTMENTS_CONFIG } },
+      {
+        path: 'contracts/tenancy',
+        loadComponent: loadTabbedPage,
+        data: {
+          title: 'Tenancy Contracts',
+          tabs: [
+            { label: 'Tenancy Contracts', config: TENANCY_CONTRACTS_CONFIG },
+            { label: 'Ejari Registrations', config: EJARI_REGISTRATIONS_CONFIG },
+            { label: 'Discounts & Grace Periods', config: TENANCY_CONTRACT_ADJUSTMENTS_CONFIG },
+          ],
+        },
+      },
       { path: 'contracts/rental', loadComponent: () => PlaceholderComponent, data: { title: 'Rental Agreements', note: 'Not built yet -- the page is designed (see features/contracts/contracts.config.ts) but has no backend API yet.' } },
       { path: 'permits/dtcm', loadComponent: loadEntityPage, data: { title: 'DTCM Permits', config: DTCM_PERMITS_CONFIG } },
       { path: 'permits/move-in', loadComponent: () => PlaceholderComponent, data: { title: 'Move-in Permits', note: 'Not built yet -- the page is designed (see features/permits/permits.config.ts) but has no backend API yet.' } },
@@ -66,17 +89,56 @@ export const routes: Routes = [
       },
 
       // ---- Reservations ----
-      { path: 'reservations', loadComponent: () => PlaceholderComponent, data: { title: 'Reservation List / Calendar', note: 'Not built yet -- the page is designed (see features/reservations/reservations.config.ts) but has no backend API yet.' } },
-      { path: 'reservations/guests', loadComponent: () => PlaceholderComponent, data: { title: 'Guests', note: 'Not built yet -- the page is designed (see features/reservations/reservations.config.ts) but has no backend API yet.' } },
+      {
+        path: 'reservations',
+        loadComponent: loadTabbedPage,
+        data: {
+          title: 'Reservations',
+          tabs: [
+            {
+              label: 'Reservation List / Calendar',
+              placeholderNote: 'Not built yet -- the page is designed (see features/reservations/reservations.config.ts) but has no backend API yet.',
+            },
+            {
+              label: 'Guests',
+              placeholderNote: 'Not built yet -- the page is designed (see features/reservations/reservations.config.ts) but has no backend API yet.',
+            },
+          ],
+        },
+      },
 
       // ---- Tasks ----
-      { path: 'tasks/board', loadComponent: () => PlaceholderComponent, data: { title: 'Task Board', note: 'Not built yet -- the page is designed (see features/tasks/tasks.config.ts) but has no backend API yet.' } },
-      { path: 'tasks/calendar', loadComponent: () => PlaceholderComponent, data: { title: 'Task Calendar', note: 'Calendar view of the same task data -- layered on once the Tasks milestone is built.' } },
+      {
+        path: 'tasks',
+        loadComponent: loadTabbedPage,
+        data: {
+          title: 'Tasks',
+          tabs: [
+            {
+              label: 'Task Board',
+              placeholderNote: 'Not built yet -- the page is designed (see features/tasks/tasks.config.ts) but has no backend API yet.',
+            },
+            { label: 'Task Calendar', placeholderNote: 'Calendar view of the same task data -- layered on once the Tasks milestone is built.' },
+          ],
+        },
+      },
 
       // ---- Bills ----
-      { path: 'bills', loadComponent: loadEntityPage, data: { title: 'Bills', config: BILLS_CONFIG } },
-      { path: 'bills/recurring', loadComponent: () => PlaceholderComponent, data: { title: 'Recurring Templates', note: 'Not built yet -- the page is designed (see features/bills/bills.config.ts) but has no backend API yet.' } },
-      { path: 'bills/missing', loadComponent: () => PlaceholderComponent, data: { title: 'Missing Bill Report', note: 'Read-only report, not a CRUD entity -- built with Reporting (plan §9 milestone 6).' } },
+      {
+        path: 'bills',
+        loadComponent: loadTabbedPage,
+        data: {
+          title: 'Bills',
+          tabs: [
+            { label: 'Bills', config: BILLS_CONFIG },
+            {
+              label: 'Recurring Templates',
+              placeholderNote: 'Not built yet -- the page is designed (see features/bills/bills.config.ts) but has no backend API yet.',
+            },
+            { label: 'Missing Bill Report', placeholderNote: 'Read-only report, not a CRUD entity -- built with Reporting (plan §9 milestone 6).' },
+          ],
+        },
+      },
 
       // ---- Accounting ----
       { path: 'accounting/chart-of-accounts', loadComponent: loadEntityPage, data: { title: 'Chart of Accounts', config: CHART_OF_ACCOUNTS_CONFIG } },

@@ -26,3 +26,5 @@ Thumbs.db
 
 # Generated
 docs/*.pdf
+
+.claude
